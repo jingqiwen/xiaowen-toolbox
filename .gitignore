@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+.idea/
+local.properties
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+.kotlin/
+
+# 本机构建缓存（可随时删除，Android Studio 会自行重建）
+.gradle_test_home/
+.gradle_home_build/
