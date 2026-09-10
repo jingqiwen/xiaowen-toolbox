@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -29,10 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.data.JsonStore
+import com.jisuanyusuiji.toolbox.tools.graph.GraphParser
+import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
+import com.jisuanyusuiji.toolbox.ui.components.LabeledField
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
 import org.json.JSONArray
 import java.math.BigDecimal
@@ -292,6 +299,7 @@ fun CasioCalculatorTool() {
     var memory by remember { mutableStateOf(0.0) }
     var ans by remember { mutableStateOf(0.0) }
     var error by remember { mutableStateOf("") }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     fun press(key: String) {
         error = ""
@@ -448,7 +456,159 @@ fun CasioCalculatorTool() {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
+        OutlinedButton(
+            onClick = { showAdvanced = true },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("🧠 高级运算：微分 / 定积分 / 求和 / GCD / 质因数 / 极坐标") }
     }
+
+    if (showAdvanced) {
+        AdvancedCalcDialog(onDismiss = { showAdvanced = false })
+    }
+}
+
+@Composable
+private fun AdvancedCalcDialog(onDismiss: () -> Unit) {
+    var mode by remember { mutableStateOf("数值微分") }
+    var f1 by remember { mutableStateOf("x^2") }
+    var f2 by remember { mutableStateOf("0") }
+    var f3 by remember { mutableStateOf("1") }
+    var result by remember { mutableStateOf(listOf<String>()) }
+    var error by remember { mutableStateOf("") }
+
+    fun evalF(expr: String, varName: String, value: Double): Double? = try {
+        GraphParser(expr) { name -> if (name == varName) value else null }.parse()
+    } catch (_: Exception) { null }
+
+    fun calc() {
+        error = ""
+        result = emptyList()
+        try {
+            when (mode) {
+                "数值微分" -> {
+                    val x0 = f2.toDoubleOrNull() ?: throw IllegalArgumentException("x0 无效")
+                    val h = 1e-6
+                    val y1 = evalF(f1, "x", x0 + h) ?: throw IllegalArgumentException("函数在 x0 附近无定义")
+                    val y2 = evalF(f1, "x", x0 - h) ?: throw IllegalArgumentException("函数在 x0 附近无定义")
+                    result = listOf("f'($x0) ≈ ${"%.8f".format((y1 - y2) / (2 * h))}")
+                }
+                "定积分" -> {
+                    val a = f2.toDoubleOrNull() ?: throw IllegalArgumentException("下限 a 无效")
+                    val b = f3.toDoubleOrNull() ?: throw IllegalArgumentException("上限 b 无效")
+                    val n = 1000
+                    val h = (b - a) / n
+                    var sum = 0.0
+                    for (i in 0..n) {
+                        val y = evalF(f1, "x", a + i * h) ?: throw IllegalArgumentException("函数在区间内无定义")
+                        sum += if (i == 0 || i == n) y else if (i % 2 == 0) 2 * y else 4 * y
+                    }
+                    result = listOf("∫[$a,$b] f(x)dx ≈ ${"%.8f".format(sum * h / 3)}")
+                }
+                "求和 Σ" -> {
+                    val from = f2.toIntOrNull() ?: throw IllegalArgumentException("起始 k 无效")
+                    val to = f3.toIntOrNull() ?: throw IllegalArgumentException("结束 k 无效")
+                    if (to - from > 1000000) throw IllegalArgumentException("求和范围过大")
+                    var sum = 0.0
+                    for (k in from..to) sum += evalF(f1, "k", k.toDouble()) ?: throw IllegalArgumentException("表达式在 k=$k 处无定义")
+                    result = listOf("Σ(k=$from..$to) ≈ ${"%.8f".format(sum)}")
+                }
+                "GCD / LCM" -> {
+                    val a = f1.toLongOrNull() ?: throw IllegalArgumentException("a 无效")
+                    val b = f2.toLongOrNull() ?: throw IllegalArgumentException("b 无效")
+                    fun gcd(x: Long, y: Long): Long = if (y == 0L) x else gcd(y, x % y)
+                    val g = gcd(kotlin.math.abs(a), kotlin.math.abs(b))
+                    val l = if (g == 0L) 0L else kotlin.math.abs(a / g * b)
+                    result = listOf("gcd($a, $b) = $g", "lcm($a, $b) = $l")
+                }
+                "质因数分解" -> {
+                    var n = f1.toLongOrNull() ?: throw IllegalArgumentException("整数 n 无效")
+                    if (n < 2) throw IllegalArgumentException("n 需 ≥ 2")
+                    val factors = mutableListOf<Long>()
+                    var divisor = 2L
+                    while (divisor * divisor <= n) {
+                        while (n % divisor == 0L) { factors.add(divisor); n /= divisor }
+                        divisor++
+                    }
+                    if (n > 1) factors.add(n)
+                    result = listOf("$f1 = " + factors.joinToString(" × "))
+                }
+                "取整 / 绝对值" -> {
+                    val x = f1.toDoubleOrNull() ?: throw IllegalArgumentException("x 无效")
+                    result = listOf(
+                        "floor = ${kotlin.math.floor(x)}",
+                        "ceil = ${kotlin.math.ceil(x)}",
+                        "round = ${kotlin.math.round(x)}",
+                        "|x| = ${kotlin.math.abs(x)}"
+                    )
+                }
+                "直角→极坐标" -> {
+                    val x = f1.toDoubleOrNull() ?: throw IllegalArgumentException("x 无效")
+                    val y = f2.toDoubleOrNull() ?: throw IllegalArgumentException("y 无效")
+                    val r = kotlin.math.sqrt(x * x + y * y)
+                    val theta = Math.toDegrees(kotlin.math.atan2(y, x))
+                    result = listOf("r = ${"%.6f".format(r)}", "θ = ${"%.6f".format(theta)}°")
+                }
+                else -> {
+                    val r = f1.toDoubleOrNull() ?: throw IllegalArgumentException("r 无效")
+                    val theta = f2.toDoubleOrNull() ?: throw IllegalArgumentException("θ 无效")
+                    val rad = Math.toRadians(theta)
+                    result = listOf("x = ${"%.6f".format(r * kotlin.math.cos(rad))}", "y = ${"%.6f".format(r * kotlin.math.sin(rad))}")
+                }
+            }
+        } catch (e: Exception) {
+            error = e.message ?: "输入错误"
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("高级运算") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                ChoiceChips(
+                    listOf("数值微分", "定积分", "求和 Σ", "GCD / LCM", "质因数分解", "取整 / 绝对值", "直角→极坐标", "极坐标→直角"),
+                    mode,
+                    { mode = it; result = emptyList(); error = "" },
+                    { it }
+                )
+                Spacer(Modifier.height(10.dp))
+                when (mode) {
+                    "GCD / LCM" -> {
+                        LabeledField(f1, { f1 = it }, "整数 a", keyboardType = KeyboardType.Number)
+                        LabeledField(f2, { f2 = it }, "整数 b", keyboardType = KeyboardType.Number)
+                    }
+                    "质因数分解", "取整 / 绝对值" -> LabeledField(f1, { f1 = it }, "输入", keyboardType = KeyboardType.Decimal)
+                    "直角→极坐标" -> {
+                        LabeledField(f1, { f1 = it }, "x", keyboardType = KeyboardType.Decimal)
+                        LabeledField(f2, { f2 = it }, "y", keyboardType = KeyboardType.Decimal)
+                    }
+                    "极坐标→直角" -> {
+                        LabeledField(f1, { f1 = it }, "r", keyboardType = KeyboardType.Decimal)
+                        LabeledField(f2, { f2 = it }, "θ（度）", keyboardType = KeyboardType.Decimal)
+                    }
+                    "数值微分" -> {
+                        LabeledField(f1, { f1 = it }, "f(x) 表达式")
+                        LabeledField(f2, { f2 = it }, "x0", keyboardType = KeyboardType.Decimal)
+                    }
+                    "定积分" -> {
+                        LabeledField(f1, { f1 = it }, "f(x) 表达式")
+                        LabeledField(f2, { f2 = it }, "下限 a", keyboardType = KeyboardType.Decimal)
+                        LabeledField(f3, { f3 = it }, "上限 b", keyboardType = KeyboardType.Decimal)
+                    }
+                    "求和 Σ" -> {
+                        LabeledField(f1, { f1 = it }, "含 k 的表达式，如 k^2")
+                        LabeledField(f2, { f2 = it }, "起始 k", keyboardType = KeyboardType.Number)
+                        LabeledField(f3, { f3 = it }, "结束 k", keyboardType = KeyboardType.Number)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = { calc() }, modifier = Modifier.fillMaxWidth()) { Text("计算") }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                result.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+    )
 }
 
 

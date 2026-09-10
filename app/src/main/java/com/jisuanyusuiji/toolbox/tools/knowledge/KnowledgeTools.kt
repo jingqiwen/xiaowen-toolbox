@@ -41,15 +41,53 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.JsonStore
 import com.jisuanyusuiji.toolbox.tools.extra.decodeImage
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
+import org.json.JSONObject
 import java.io.File
+
+private val assetLogoCache = mutableMapOf<String, Bitmap?>()
+
+private fun loadAssetLogo(context: android.content.Context, name: String): Bitmap? =
+    assetLogoCache.getOrPut(name) {
+        try {
+            context.assets.open("car_logos/$name").use { android.graphics.BitmapFactory.decodeStream(it) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+private fun loadSimpleIconMap(context: android.content.Context): Map<String, String> = try {
+    context.assets.open("simple_icon_slugs.json").use { input ->
+        val obj = JSONObject(input.readBytes().toString(Charsets.UTF_8))
+        val map = mutableMapOf<String, String>()
+        obj.keys().forEach { key ->
+            val res = obj.optJSONObject(key)?.optString("res") ?: ""
+            if (res.isNotBlank()) map[key] = res
+        }
+        map
+    }
+} catch (_: Exception) {
+    emptyMap()
+}
+
+private fun drawableId(context: android.content.Context, name: String?): Int {
+    if (name.isNullOrBlank()) return 0
+    return try {
+        context.resources.getIdentifier(name, "drawable", context.packageName)
+    } catch (_: Exception) {
+        0
+    }
+}
 
 // ============================================================
 // 车标图鉴：文字徽标 + 用户导入真实车标图片（仅存本机）
@@ -95,6 +133,17 @@ fun CarLogoTool() {
                 (query.isBlank() || it.name.contains(query, true) || it.badge.contains(query, true))
         }
     }
+    val assetFiles = remember(refresh) {
+        try {
+            context.assets.list("car_logos")?.mapNotNull { name ->
+                val idx = name.substringBefore('_').toIntOrNull()
+                if (idx != null) idx to name else null
+            }?.toMap() ?: emptyMap()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+    val simpleIcons = remember { loadSimpleIconMap(context) }
 
     Column(Modifier.fillMaxSize()) {
         Text(
@@ -137,9 +186,32 @@ fun CarLogoTool() {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val file = logoFile(car)
+                        val assetBitmap = assetFiles[CarLogoData.items.indexOf(car)]?.let { loadAssetLogo(context, it) }
+                        val iconId = drawableId(context, simpleIcons[car.name])
                         if (file != null) {
                             Image(
                                 bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath).asImageBitmap(),
+                                contentDescription = car.name,
+                                modifier = Modifier.size(52.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else if (iconId != 0) {
+                            Box(
+                                Modifier
+                                    .size(52.dp)
+                                    .background(Color(0xFF37474F), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(iconId),
+                                    contentDescription = car.name,
+                                    colorFilter = ColorFilter.tint(Color.White),
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        } else if (assetBitmap != null) {
+                            Image(
+                                bitmap = assetBitmap.asImageBitmap(),
                                 contentDescription = car.name,
                                 modifier = Modifier.size(52.dp),
                                 contentScale = ContentScale.Fit
@@ -171,7 +243,7 @@ fun CarLogoTool() {
             }
             item {
                 Text(
-                    "内置为文字徽标；点击任意车标可导入你手机里的真实车标图片，图片仅保存在本机。",
+                    "已自动加载 Wikimedia Commons 上可公开使用的车标；未收录或未下载到的可点击车标自行导入。图片版权与来源见项目根目录 CAR_LOGO_CREDITS.json。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -182,6 +254,8 @@ fun CarLogoTool() {
 
     editing?.let { car ->
         val file = logoFile(car)
+        val assetBitmap = assetFiles[CarLogoData.items.indexOf(car)]?.let { loadAssetLogo(context, it) }
+        val iconId = drawableId(context, simpleIcons[car.name])
         AlertDialog(
             onDismissRequest = { editing = null },
             title = { Text(car.name) },
@@ -193,6 +267,37 @@ fun CarLogoTool() {
                             contentDescription = car.name,
                             modifier = Modifier.size(180.dp),
                             contentScale = ContentScale.Fit
+                        )
+                    } else if (iconId != 0) {
+                        Box(
+                            Modifier
+                                .size(140.dp)
+                                .background(Color(0xFF37474F), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(iconId),
+                                contentDescription = car.name,
+                                colorFilter = ColorFilter.tint(Color.White),
+                                modifier = Modifier.size(90.dp)
+                            )
+                        }
+                        Text(
+                            "车标来源：Simple Icons（CC0）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else if (assetBitmap != null) {
+                        Image(
+                            bitmap = assetBitmap.asImageBitmap(),
+                            contentDescription = car.name,
+                            modifier = Modifier.size(180.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                        Text(
+                            "公开版权车标（Wikimedia Commons）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Box(
@@ -214,7 +319,7 @@ fun CarLogoTool() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (file == null) "📷 导入真实车标图片" else "🔄 更换车标图片")
+                        Text(if (file == null) "📷 导入自定义图片" else "🔄 更换图片")
                     }
                     if (file != null) {
                         Spacer(Modifier.height(6.dp))

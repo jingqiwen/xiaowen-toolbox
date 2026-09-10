@@ -1,0 +1,312 @@
+{
+  "大众": {
+    "slug": "volkswagen",
+    "res": "carlogo_volkswagen",
+    "title": "volkswagen"
+  },
+  "奥迪": {
+    "slug": "audi",
+    "res": "carlogo_audi",
+    "title": "audi"
+  },
+  "宝马": {
+    "slug": "bmw",
+    "res": "carlogo_bmw",
+    "title": "bmw"
+  },
+  "保时捷": {
+    "slug": "porsche",
+    "res": "carlogo_porsche",
+    "title": "porsche"
+  },
+  "欧宝": {
+    "slug": "opel",
+    "res": "carlogo_opel",
+    "title": "opel"
+  },
+  "斯柯达": {
+    "slug": "skoda",
+    "res": "carlogo_skoda",
+    "title": "skoda"
+  },
+  "西雅特": {
+    "slug": "seat",
+    "res": "carlogo_seat",
+    "title": "seat"
+  },
+  "布加迪": {
+    "slug": "bugatti",
+    "res": "carlogo_bugatti",
+    "title": "bugatti"
+  },
+  "曼恩": {
+    "slug": "man",
+    "res": "carlogo_man",
+    "title": "man"
+  },
+  "丰田": {
+    "slug": "toyota",
+    "res": "carlogo_toyota",
+    "title": "toyota"
+  },
+  "本田": {
+    "slug": "honda",
+    "res": "carlogo_honda",
+    "title": "honda"
+  },
+  "日产": {
+    "slug": "nissan",
+    "res": "carlogo_nissan",
+    "title": "nissan"
+  },
+  "马自达": {
+    "slug": "mazda",
+    "res": "carlogo_mazda",
+    "title": "mazda"
+  },
+  "三菱": {
+    "slug": "mitsubishi",
+    "res": "carlogo_mitsubishi",
+    "title": "mitsubishi"
+  },
+  "斯巴鲁": {
+    "slug": "subaru",
+    "res": "carlogo_subaru",
+    "title": "subaru"
+  },
+  "铃木": {
+    "slug": "suzuki",
+    "res": "carlogo_suzuki",
+    "title": "suzuki"
+  },
+  "英菲尼迪": {
+    "slug": "infiniti",
+    "res": "carlogo_infiniti",
+    "title": "infiniti"
+  },
+  "讴歌": {
+    "slug": "acura",
+    "res": "carlogo_acura",
+    "title": "acura"
+  },
+  "福特": {
+    "slug": "ford",
+    "res": "carlogo_ford",
+    "title": "ford"
+  },
+  "雪佛兰": {
+    "slug": "chevrolet",
+    "res": "carlogo_chevrolet",
+    "title": "chevrolet"
+  },
+  "凯迪拉克": {
+    "slug": "cadillac",
+    "res": "carlogo_cadillac",
+    "title": "cadillac"
+  },
+  "克莱斯勒": {
+    "slug": "chrysler",
+    "res": "carlogo_chrysler",
+    "title": "chrysler"
+  },
+  "Jeep": {
+    "slug": "jeep",
+    "res": "carlogo_jeep",
+    "title": "jeep"
+  },
+  "特斯拉": {
+    "slug": "tesla",
+    "res": "carlogo_tesla",
+    "title": "tesla"
+  },
+  "土星": {
+    "slug": "saturn",
+    "res": "carlogo_saturn",
+    "title": "saturn"
+  },
+  "路西德": {
+    "slug": "lucid",
+    "res": "carlogo_lucid",
+    "title": "lucid"
+  },
+  "哪吒": {
+    "slug": "netapp",
+    "res": "carlogo_netapp",
+    "title": "netapp"
+  },
+  "名爵": {
+    "slug": "mg",
+    "res": "carlogo_mg",
+    "title": "mg"
+  },
+  "小米汽车": {
+    "slug": "xiaomi",
+    "res": "carlogo_xiaomi",
+    "title": "xiaomi"
+  },
+  "萤火虫": {
+    "slug": "fireflyiii",
+    "res": "carlogo_fireflyiii",
+    "title": "fireflyiii"
+  },
+  "现代": {
+    "slug": "hyundai",
+    "res": "carlogo_hyundai",
+    "title": "hyundai"
+  },
+  "起亚": {
+    "slug": "kia",
+    "res": "carlogo_kia",
+    "title": "kia"
+  },
+  "标致": {
+    "slug": "peugeot",
+    "res": "carlogo_peugeot",
+    "title": "peugeot"
+  },
+  "雪铁龙": {
+    "slug": "citroen",
+    "res": "carlogo_citroen",
+    "title": "citroen"
+  },
+  "雷诺": {
+    "slug": "renault",
+    "res": "carlogo_renault",
+    "title": "renault"
+  },
+  "DS": {
+    "slug": "dsautomobiles",
+    "res": "carlogo_dsautomobiles",
+    "title": "dsautomobiles"
+  },
+  "阿尔派": {
+    "slug": "alpinedotjs",
+    "res": "carlogo_alpinedotjs",
+    "title": "alpinedotjs"
+  },
+  "法拉利": {
+    "slug": "ferrari",
+    "res": "carlogo_ferrari",
+    "title": "ferrari"
+  },
+  "兰博基尼": {
+    "slug": "lamborghini",
+    "res": "carlogo_lamborghini",
+    "title": "lamborghini"
+  },
+  "玛莎拉蒂": {
+    "slug": "maserati",
+    "res": "carlogo_maserati",
+    "title": "maserati"
+  },
+  "菲亚特": {
+    "slug": "fiat",
+    "res": "carlogo_fiat",
+    "title": "fiat"
+  },
+  "依维柯": {
+    "slug": "iveco",
+    "res": "carlogo_iveco",
+    "title": "iveco"
+  },
+  "杜卡迪": {
+    "slug": "ducati",
+    "res": "carlogo_ducati",
+    "title": "ducati"
+  },
+  "劳斯莱斯": {
+    "slug": "rollsroyce",
+    "res": "carlogo_rollsroyce",
+    "title": "rollsroyce"
+  },
+  "宾利": {
+    "slug": "bentley",
+    "res": "carlogo_bentley",
+    "title": "bentley"
+  },
+  "迈凯伦": {
+    "slug": "mclaren",
+    "res": "carlogo_mclaren",
+    "title": "mclaren"
+  },
+  "阿斯顿·马丁": {
+    "slug": "astonmartin",
+    "res": "carlogo_astonmartin",
+    "title": "astonmartin"
+  },
+  "MINI": {
+    "slug": "mini",
+    "res": "carlogo_mini",
+    "title": "mini"
+  },
+  "沃克斯豪尔": {
+    "slug": "vauxhall",
+    "res": "carlogo_vauxhall",
+    "title": "vauxhall"
+  },
+  "沃尔沃": {
+    "slug": "volvo",
+    "res": "carlogo_volvo",
+    "title": "volvo"
+  },
+  "极星": {
+    "slug": "polestar",
+    "res": "carlogo_polestar",
+    "title": "polestar"
+  },
+  "科尼赛克": {
+    "slug": "koenigsegg",
+    "res": "carlogo_koenigsegg",
+    "title": "koenigsegg"
+  },
+  "斯堪尼亚": {
+    "slug": "scania",
+    "res": "carlogo_scania",
+    "title": "scania"
+  },
+  "达契亚": {
+    "slug": "dacia",
+    "res": "carlogo_dacia",
+    "title": "dacia"
+  },
+  "拉达": {
+    "slug": "lada",
+    "res": "carlogo_lada",
+    "title": "lada"
+  },
+  "达夫": {
+    "slug": "daf",
+    "res": "carlogo_daf",
+    "title": "daf"
+  },
+  "Togg": {
+    "slug": "toggl",
+    "res": "carlogo_toggl",
+    "title": "toggl"
+  },
+  "塔塔": {
+    "slug": "tata",
+    "res": "carlogo_tata",
+    "title": "tata"
+  },
+  "马恒达": {
+    "slug": "mahindra",
+    "res": "carlogo_mahindra",
+    "title": "mahindra"
+  },
+  "宝腾": {
+    "slug": "proton",
+    "res": "carlogo_proton",
+    "title": "proton"
+  },
+  "KTM": {
+    "slug": "ktm",
+    "res": "carlogo_ktm",
+    "title": "ktm"
+  },
+  "雅马哈": {
+    "slug": "yamahacorporation",
+    "res": "carlogo_yamahacorporation",
+    "title": "yamahacorporation"
+  }
+}

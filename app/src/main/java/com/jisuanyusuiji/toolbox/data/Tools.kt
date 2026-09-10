@@ -49,6 +49,9 @@ import com.jisuanyusuiji.toolbox.tools.extra.VideoEditTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToAudioTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToGifTool
 import com.jisuanyusuiji.toolbox.tools.extra.WordToPdfTool
+import com.jisuanyusuiji.toolbox.tools.graph.FunctionGraphTool
+import com.jisuanyusuiji.toolbox.tools.graph.Surface3DTool
+import com.jisuanyusuiji.toolbox.tools.probability.ProbabilityTool
 import com.jisuanyusuiji.toolbox.tools.vocab.VocabTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.CarLogoTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaTool
@@ -77,6 +80,7 @@ enum class ToolCategory(val title: String) {
     RANDOM("🎲 随机工具"),
     MEDIA("🎬 影音与图像"),
     CALC("🧮 计算与转换"),
+    GRAPH("📈 函数绘图"),
     TEXT("📝 文本与编码"),
     KNOWLEDGE("📚 图鉴查询"),
     EXTRA("📦 实用工具")
@@ -156,10 +160,15 @@ object ToolRegistry {
         ToolDef("video_to_gif", "视频转 GIF", "抽帧生成动图", "🎞️", ToolCategory.MEDIA) { VideoToGifTool() },
         ToolDef("video_edit", "视频格式转换/变速/压缩", "输出 MP4(H.264)，支持变速与重编码", "🎬", ToolCategory.MEDIA) { VideoEditTool() },
 
+        // ---------- 函数绘图 ----------
+        ToolDef("graph_2d", "函数绘图器（2D）", "显函数/极坐标/参数方程/隐函数/不等式，滑块与导出", "📈", ToolCategory.GRAPH) { FunctionGraphTool() },
+        ToolDef("graph_3d", "三维函数绘图器", "z=f(x,y) 曲面，旋转查看与导出", "🧊", ToolCategory.GRAPH) { Surface3DTool() },
+
         // ---------- 图鉴查询 ----------
-        ToolDef("car_badges", "车标图鉴", "只认识车标图标与名称", "🚗", ToolCategory.KNOWLEDGE) { CarLogoTool() },
+        ToolDef("car_badges", "车标图鉴", "170+ 车标，自动加载公开版权车标，可自行导入", "🚗", ToolCategory.KNOWLEDGE) { CarLogoTool() },
         ToolDef("shortcut_keys", "电脑快捷键查询", "Windows / macOS 常用与进阶快捷键", "⌨️", ToolCategory.KNOWLEDGE) { ShortcutTool() },
         ToolDef("formula_query", "数学物理公式查询", "约 150 条数学/物理公式，可搜索分类", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
+        ToolDef("probability", "概率论公式与分布", "概率公式大全 + 正态/二项/泊松等分布计算", "🎲", ToolCategory.KNOWLEDGE) { ProbabilityTool() },
         ToolDef("vocab", "考研背单词", "词库搜索、卡片背诵、自定义词库导入", "📚", ToolCategory.KNOWLEDGE) { VocabTool() },
 
         // ---------- 实用工具 ----------

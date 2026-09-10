@@ -1,0 +1,242 @@
+﻿[
+    {
+        "brand":  "奥迪",
+        "file":  "001_Audi.png",
+        "title":  "File:Audi-Logo 2016.svg",
+        "license":  "Public domain",
+        "artist":  "Strichpunkt / KMS Team",
+        "source":  "https://commons.wikimedia.org/wiki/File:Audi-Logo_2016.svg"
+    },
+    {
+        "brand":  "大众",
+        "file":  "000_VW.png",
+        "title":  "File:VW logo 1937 to 1939.svg",
+        "license":  "Public domain",
+        "artist":  "Asav",
+        "source":  "https://commons.wikimedia.org/wiki/File:VW_logo_1937_to_1939.svg"
+    },
+    {
+        "brand":  "奔驰",
+        "file":  "003_Benz.png",
+        "title":  "File:Daimler-Benz Logo alt.svg",
+        "license":  "Public domain",
+        "artist":  "Unknown authorUnknown author",
+        "source":  "https://commons.wikimedia.org/wiki/File:Daimler-Benz_Logo_alt.svg"
+    },
+    {
+        "brand":  "迈巴赫",
+        "file":  "004_Maybach.png",
+        "title":  "File:Maybach logo.png",
+        "license":  "Public domain",
+        "artist":  "Maybach",
+        "source":  "https://commons.wikimedia.org/wiki/File:Maybach_logo.png"
+    },
+    {
+        "brand":  "保时捷",
+        "file":  "005_Porsche.png",
+        "title":  "File:Porsche-Diesel Motorenbau logo.jpg",
+        "license":  "Public domain",
+        "artist":  "Porsche-Diesel Motorenbau GmbH",
+        "source":  "https://commons.wikimedia.org/wiki/File:Porsche-Diesel_Motorenbau_logo.jpg"
+    },
+    {
+        "brand":  "欧宝",
+        "file":  "006_Opel.png",
+        "title":  "File:Opel-Beyschlag-Logo-Alt.jpg",
+        "license":  "Public domain",
+        "artist":  "Opel \u0026amp; Beyschlag GmbH",
+        "source":  "https://commons.wikimedia.org/wiki/File:Opel-Beyschlag-Logo-Alt.jpg"
+    },
+    {
+        "brand":  "斯柯达",
+        "file":  "007_Skoda.png",
+        "title":  "File:Skoda Museum logo.png",
+        "license":  "Public domain",
+        "artist":  "Škoda Auto a.s.",
+        "source":  "https://commons.wikimedia.org/wiki/File:Skoda_Museum_logo.png"
+    },
+    {
+        "brand":  "宝马",
+        "file":  "002_BMW.png",
+        "title":  "File:Logo BMW Group 2021.svg",
+        "license":  "Public domain",
+        "artist":  "BMW Group",
+        "source":  "https://commons.wikimedia.org/wiki/File:Logo_BMW_Group_2021.svg"
+    },
+    {
+        "brand":  "本田",
+        "file":  "017_Honda.png",
+        "title":  "File:BSB Flex cars 13 09 2008 Honda Flex logo zoom.jpg",
+        "license":  "CC BY-SA 3.0",
+        "artist":  "Mariordo Mario Roberto Duran Ortiz",
+        "source":  "https://commons.wikimedia.org/wiki/File:BSB_Flex_cars_13_09_2008_Honda_Flex_logo_zoom.jpg"
+    },
+    {
+        "brand":  "福特",
+        "file":  "031_Ford.png",
+        "title":  "File:Ford logo 1912.png",
+        "license":  "Public domain",
+        "artist":  "Unknown authorUnknown author",
+        "source":  "https://commons.wikimedia.org/wiki/File:Ford_logo_1912.png"
+    },
+    {
+        "brand":  "光冈",
+        "file":  "029_Mitsuoka.png",
+        "title":  "File:Mitsuoka Buddy logo.png",
+        "license":  "Public domain",
+        "artist":  "Mitsuoka Motor Co., Ltd.",
+        "source":  "https://commons.wikimedia.org/wiki/File:Mitsuoka_Buddy_logo.png"
+    },
+    {
+        "brand":  "雪佛兰",
+        "file":  "032_Chevy.png",
+        "title":  "File:Chevrolet BelAir logo back IMGP4763.jpg",
+        "license":  "CC BY-SA 2.0 de",
+        "artist":  "Smial",
+        "source":  "https://commons.wikimedia.org/wiki/File:Chevrolet_BelAir_logo_back_IMGP4763.jpg"
+    },
+    {
+        "brand":  "日野",
+        "file":  "028_Hino.png",
+        "title":  "File:Hino Motors logo.svg",
+        "license":  "Public domain",
+        "artist":  "Hino Motors, Ltd.",
+        "source":  "https://commons.wikimedia.org/wiki/File:Hino_Motors_logo.svg"
+    },
+    {
+        "brand":  "凯迪拉克",
+        "file":  "034_Cadillac.png",
+        "title":  "File:Cadillac Logo 1906.webp",
+        "license":  "Public domain",
+        "artist":  "Cadillac",
+        "source":  "https://commons.wikimedia.org/wiki/File:Cadillac_Logo_1906.webp"
+    },
+    {
+        "brand":  "克莱斯勒",
+        "file":  "036_Chrysler.png",
+        "title":  "File:Logo chrysler club bulgaria.png",
+        "license":  "CC BY-SA 3.0",
+        "artist":  "Chryslerclubbulgaria",
+        "source":  "https://commons.wikimedia.org/wiki/File:Logo_chrysler_club_bulgaria.png"
+    },
+    {
+        "brand":  "标致",
+        "file":  "124_Peugeot.png",
+        "title":  "File:Peugeot RCZ - Logo Delantero.jpg",
+        "license":  "CC BY-SA 3.0",
+        "artist":  "Biology9",
+        "source":  "https://commons.wikimedia.org/wiki/File:Peugeot_RCZ_-_Logo_Delantero.jpg"
+    },
+    {
+        "brand":  "雪铁龙",
+        "file":  "125_Citroen.png",
+        "title":  "File:Citroen-logo-2009.png",
+        "license":  "Public domain",
+        "artist":  "Unknown authorUnknown author",
+        "source":  "https://commons.wikimedia.org/wiki/File:Citroen-logo-2009.png"
+    },
+    {
+        "brand":  "雷诺",
+        "file":  "126_Renault.png",
+        "title":  "File:Renault Samsung Motors logo.svg",
+        "license":  "Public domain",
+        "artist":  "Renault Samsung Motors",
+        "source":  "https://commons.wikimedia.org/wiki/File:Renault_Samsung_Motors_logo.svg"
+    },
+    {
+        "brand":  "起亚",
+        "file":  "120_Kia.png",
+        "title":  "File:Kia Motors 2002-2012 Logo.svg",
+        "license":  "Public domain",
+        "artist":  "Kia Motors",
+        "source":  "https://commons.wikimedia.org/wiki/File:Kia_Motors_2002-2012_Logo.svg"
+    },
+    {
+        "brand":  "西雅特",
+        "file":  "008_Seat.png",
+        "title":  "File:SEAT logo on steering wheel.jpg",
+        "license":  "CC BY 2.0",
+        "artist":  "Pablo BM from London, England",
+        "source":  "https://commons.wikimedia.org/wiki/File:SEAT_logo_on_steering_wheel.jpg"
+    },
+    {
+        "brand":  "日产",
+        "file":  "018_Nissan.png",
+        "title":  "File:Nissan logo.svg",
+        "license":  "Public domain",
+        "artist":  "",
+        "source":  "https://commons.wikimedia.org/wiki/File:Nissan_logo.svg"
+    },
+    {
+        "brand":  "丰田",
+        "file":  "016_Toyota.png",
+        "title":  "File:Rear Scion Emblem - 2014 Scion tC (15666663597).jpg",
+        "license":  "CC BY 2.0",
+        "artist":  "Michael Sheehan",
+        "source":  "https://commons.wikimedia.org/wiki/File:Rear_Scion_Emblem_-_2014_Scion_tC_(15666663597).jpg"
+    },
+    {
+        "brand":  "三菱",
+        "file":  "020_Mitsubishi.png",
+        "title":  "File:Mitsubishi logo.svg",
+        "license":  "Public domain",
+        "artist":  "Mitsubishi",
+        "source":  "https://commons.wikimedia.org/wiki/File:Mitsubishi_logo.svg"
+    },
+    {
+        "brand":  "斯巴鲁",
+        "file":  "021_Subaru.png",
+        "title":  "File:Subaru logo.svg",
+        "license":  "Public domain",
+        "artist":  "Subaru",
+        "source":  "https://commons.wikimedia.org/wiki/File:Subaru_logo.svg"
+    },
+    {
+        "brand":  "铃木",
+        "file":  "022_Suzuki.png",
+        "title":  "File:Suzuki logo.svg",
+        "license":  "Public domain",
+        "artist":  "TTTNIS",
+        "source":  "https://commons.wikimedia.org/wiki/File:Suzuki_logo.svg"
+    },
+    {
+        "brand":  "雷克萨斯",
+        "file":  "023_Lexus.png",
+        "title":  "File:Lexus logo.jpg",
+        "license":  "CC BY 2.0",
+        "artist":  "leginmat",
+        "source":  "https://commons.wikimedia.org/wiki/File:Lexus_logo.jpg"
+    },
+    {
+        "brand":  "库普拉",
+        "file":  "009_Cupra.png",
+        "title":  "File:SEAT Leon Cupra R Mk2 logo.jpg",
+        "license":  "CC BY 2.0",
+        "artist":  "Bruno Kussler Marques",
+        "source":  "https://commons.wikimedia.org/wiki/File:SEAT_Leon_Cupra_R_Mk2_logo.jpg"
+    },
+    {
+        "brand":  "英菲尼迪",
+        "file":  "024_Infiniti.png",
+        "title":  "File:Osaka Motor Show 2013 (23) Nissan Infiniti logo.JPG",
+        "license":  "CC BY 2.0",
+        "artist":  "Tokumeigakarinoaoshima",
+        "source":  "https://commons.wikimedia.org/wiki/File:Osaka_Motor_Show_2013_(23)_Nissan_Infiniti_logo.JPG"
+    },
+    {
+        "brand":  "讴歌",
+        "file":  "025_Acura.png",
+        "title":  "File:Acura logo.svg",
+        "license":  "Public domain",
+        "artist":  "Basavarajtalwar",
+        "source":  "https://commons.wikimedia.org/wiki/File:Acura_logo.svg"
+    },
+    {
+        "brand":  "马自达",
+        "file":  "019_Mazda.png",
+        "title":  "File:Mazda logo 1997.png",
+        "license":  "CC BY-SA 4.0",
+        "artist":  "MMNL01",
+        "source":  "https://commons.wikimedia.org/wiki/File:Mazda_logo_1997.png"
+    }
+]
