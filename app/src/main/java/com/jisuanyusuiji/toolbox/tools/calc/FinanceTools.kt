@@ -61,15 +61,35 @@ fun DepositInterestTool() {
             val y = d(years) ?: run { error = "请输入有效年限"; return }
             if (compound) {
                 val total = p * (1.0 + r).pow(y)
-                result = listOf("按年复利", "本息合计：${money(total)} 元", "利息：${money(total - p)} 元")
+                result = listOf(
+                    "计息方式：复利（利息也参与计息，按年复利）",
+                    "公式：本息合计 = 本金 × (1 + 年利率)^年数",
+                    "代入：${money(p)} × (1 + ${money(r * 100)}%)^${money(y)}",
+                    "本息合计：${money(total)} 元",
+                    "利息：${money(total - p)} 元",
+                    "说明：复利比单利多出的部分是“利滚利”产生的。"
+                )
             } else {
                 val interest = p * r * y
-                result = listOf("单利计息", "利息：${money(interest)} 元", "本息合计：${money(p + interest)} 元")
+                result = listOf(
+                    "计息方式：单利（只按最初本金计息）",
+                    "公式：利息 = 本金 × 年利率 × 年数",
+                    "代入：${money(p)} × ${money(r * 100)}% × ${money(y)}",
+                    "利息：${money(interest)} 元",
+                    "本息合计：${money(p + interest)} 元"
+                )
             }
         } else {
             val dd = d(days) ?: run { error = "请输入有效天数"; return }
             val interest = p * r * dd / 360.0
-            result = listOf("活期按 360 天/年计息", "利息：${money(interest)} 元", "本息合计：${money(p + interest)} 元")
+            result = listOf(
+                "计息方式：活期存款（银行惯例按 360 天/年）",
+                "公式：利息 = 本金 × 年利率 × 存款天数 ÷ 360",
+                "代入：${money(p)} × ${money(r * 100)}% × ${money(dd)} ÷ 360",
+                "利息：${money(interest)} 元",
+                "本息合计：${money(p + interest)} 元",
+                "注意：活期一般按季度结息，实际利息以银行系统为准。"
+            )
         }
     }
 
@@ -100,9 +120,23 @@ fun DepositInterestTool() {
         }
         ErrorText(error)
         if (result.isNotEmpty()) {
-            SectionCard(title = "结果") {
+            SectionCard(title = "结果与计算过程") {
                 result.forEach { InfoRow("", it) }
             }
+        }
+        SectionCard(title = "💰 存款利息知识点") {
+            Text(
+                "1. 单利：只对本金计息。\n" +
+                    "   利息 = 本金 × 年利率 × 年数\n\n" +
+                    "2. 复利：利息也会产生利息（利滚利）。\n" +
+                    "   本息 = 本金 × (1 + 年利率)^年数\n\n" +
+                    "3. 年利率 vs 年化收益率：定期存款用「年利率」；理财产品常用「七日年化」等，只是估算，不等于实际收益。\n\n" +
+                    "4. 活期利息：通常按 360 天/年、按季结息；金额小、流动性高。\n\n" +
+                    "5. 定期提前支取：一般按活期利率计息，会损失大部分利息，存钱前要规划好期限。\n\n" +
+                    "6. 利息税：目前中国个人存款利息暂免征收利息税，政策如有调整以最新规定为准。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

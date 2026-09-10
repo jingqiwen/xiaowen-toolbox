@@ -119,10 +119,10 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             SectionCard(title = "ℹ️ 关于") {
-                Text("小温工具箱 v0.4.0")
+                Text("小温工具箱 v0.5.0")
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "已包含 61 个工具：随机 9、计算转换 21、文本编码 10、影音图像 12、图鉴查询 2、实用 7。\n全部本地离线运行，不上传任何数据。",
+                    "已包含 69 个工具：随机 10、影音图像 12、计算转换 21、文本编码 10、图鉴查询 4、实用 12。\n全部本地离线运行，不上传任何数据。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

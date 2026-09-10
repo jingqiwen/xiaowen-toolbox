@@ -58,6 +58,122 @@ fun decodeImage(context: Context, uri: Uri, maxSize: Int = 4096): Bitmap? = try 
     }
 } catch (_: Exception) { null }
 
+/** 保存结果，用于转换后预览/打开/分享。 */
+data class SavedMedia(val message: String, val uri: Uri?, val file: File?, val mimeType: String)
+
+fun saveMedia(context: Context, bytes: ByteArray, mimeType: String, displayName: String): SavedMedia {
+    val subDir = when {
+        mimeType.contains("pdf") -> Environment.DIRECTORY_DOCUMENTS
+        mimeType.startsWith("audio") -> Environment.DIRECTORY_MUSIC
+        mimeType.startsWith("video") -> Environment.DIRECTORY_MOVIES
+        else -> Environment.DIRECTORY_PICTURES
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "$subDir/Toolbox")
+        }
+        val collection = when {
+            mimeType.contains("pdf") -> MediaStore.Files.getContentUri("external")
+            mimeType.startsWith("audio") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            mimeType.startsWith("video") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        val uri = context.contentResolver.insert(collection, values)
+        return if (uri == null) {
+            SavedMedia("保存失败：无法创建媒体文件", null, null, mimeType)
+        } else {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            SavedMedia("已保存到 $subDir/Toolbox", uri, null, mimeType)
+        }
+    } else {
+        val dir = context.getExternalFilesDir(subDir)
+        val file = File(dir, displayName)
+        file.outputStream().use { it.write(bytes) }
+        return SavedMedia("已保存：${file.absolutePath}", null, file, mimeType)
+    }
+}
+
+fun saveBitmapMedia(
+    context: Context,
+    bitmap: Bitmap,
+    mimeType: String,
+    format: Bitmap.CompressFormat,
+    quality: Int = 90,
+    displayName: String
+): SavedMedia {
+    val bytes = ByteArrayOutputStream()
+    bitmap.compress(format, quality, bytes)
+    return saveMedia(context, bytes.toByteArray(), mimeType, displayName)
+}
+
+/** 打开已保存的文件。 */
+fun openMedia(context: Context, saved: SavedMedia) {
+    try {
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            if (saved.uri != null) {
+                setDataAndType(saved.uri, saved.mimeType)
+            } else if (saved.file != null) {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    saved.file
+                )
+                setDataAndType(uri, saved.mimeType)
+            } else return
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
+    }
+}
+
+/** 打开文件所在位置（尽力而为：优先用系统文件管理器打开目录）。 */
+fun openContainingFolder(context: Context, saved: SavedMedia) {
+    val relative = when {
+        saved.mimeType.contains("pdf") -> "Documents/Toolbox"
+        saved.mimeType.startsWith("audio") -> "Music/Toolbox"
+        saved.mimeType.startsWith("video") -> "Movies/Toolbox"
+        else -> "Pictures/Toolbox"
+    }
+    try {
+        val docId = "primary:" + relative
+        val uri = android.net.Uri.parse("content://com.android.externalstorage.documents/document/$docId")
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "vnd.android.document/directory")
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        // 找不到文件管理器时退化为打开文件
+        openMedia(context, saved)
+    }
+}
+
+/** 分享已保存的文件。 */
+fun shareMedia(context: Context, saved: SavedMedia) {
+    try {
+        val uri = when {
+            saved.uri != null -> saved.uri
+            saved.file != null -> FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                saved.file
+            )
+            else -> return
+        }
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = saved.mimeType
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "分享文件"))
+    } catch (_: Exception) {
+    }
+}
+
 /** 保存 Bitmap 到相册（API 29+ 走 MediaStore，低版本存应用图片目录）。 */
 fun saveBitmapToGallery(
     context: Context,
@@ -66,11 +182,7 @@ fun saveBitmapToGallery(
     format: Bitmap.CompressFormat,
     quality: Int = 90,
     displayName: String
-): String {
-    val bytes = ByteArrayOutputStream()
-    bitmap.compress(format, quality, bytes)
-    return saveBytesToGallery(context, bytes.toByteArray(), mimeType, displayName)
-}
+): String = saveBitmapMedia(context, bitmap, mimeType, format, quality, displayName).message
 
 /** 保存字节（如 PDF）到相册/Download 或应用目录。 */
 fun saveBytesToGallery(context: Context, bytes: ByteArray, mimeType: String, displayName: String): String {

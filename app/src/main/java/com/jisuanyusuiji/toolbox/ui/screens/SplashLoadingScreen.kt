@@ -1,78 +1,50 @@
 package com.jisuanyusuiji.toolbox.ui.screens
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.jisuanyusuiji.toolbox.R
+import androidx.compose.ui.unit.sp
 
 /**
- * 启动加载页：默认读取 assets/splash_loading.png（用户提供的加载图），
- * 如果还没有放入图片，则显示内置图标作为占位。
+ * 启动加载页：4 秒文字声明（不含图片）。
  */
 @Composable
 fun SplashLoadingScreen() {
-    val context = LocalContext.current
-    val splashBitmap = remember {
-        try {
-            context.assets.open("splash_loading.png").use { BitmapFactory.decodeStream(it) }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B1020)),
+            .background(Color(0xFF101426))
+            .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (splashBitmap != null) {
-            Image(
-                bitmap = splashBitmap.asImageBitmap(),
-                contentDescription = "启动加载图",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "小温工具箱",
+                color = Color(0xFF8FA2FF),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
             )
-        } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = "应用图标",
-                    modifier = Modifier.size(140.dp)
-                )
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    "小温工具箱",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "正在加载…",
-                    color = Color(0xFFB9C3FF),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
-                )
-            }
+            Spacer(Modifier.height(28.dp))
+            Text(
+                "此软件为温景淇个人所写\n请勿用于商业用途\n一旦发现，必究其责",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                lineHeight = 40.sp
+            )
         }
     }
 }

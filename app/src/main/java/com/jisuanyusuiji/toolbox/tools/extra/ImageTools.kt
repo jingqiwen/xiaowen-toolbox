@@ -72,14 +72,15 @@ fun ImageFormatConvertTool() {
     val context = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var format by remember { mutableStateOf("jpg") }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var lastOutputSize by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it) } }
 
     fun convert() {
         val bmp = bitmap ?: run { error = "请先选择图片"; return }
         error = ""
-        message = ""
+        saved = null
         val bytes: ByteArray
         val mime: String
         val ext: String
@@ -99,10 +100,8 @@ fun ImageFormatConvertTool() {
             "bmp" -> { bytes = encodeBmp(bmp); mime = "image/bmp"; ext = "bmp" }
             else -> { bytes = encodeTiff(bmp); mime = "image/tiff"; ext = "tif" }
         }
-        message = saveBytesToGallery(
-            context, bytes, mime,
-            "IMG_${System.currentTimeMillis()}.$ext"
-        ) + "\n输出大小：${sizeText(bytes.size)}"
+        saved = saveMedia(context, bytes, mime, "IMG_${System.currentTimeMillis()}.$ext")
+        lastOutputSize = "输出大小：${sizeText(bytes.size)}"
     }
 
     Column(
@@ -128,8 +127,20 @@ fun ImageFormatConvertTool() {
             Button(onClick = { convert() }, enabled = bitmap != null, modifier = Modifier.fillMaxWidth()) { Text("开始转换") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) {
-            SectionCard(title = "结果") { Text(message) }
+        val converted = saved
+        if (converted != null) {
+            SectionCard(title = "转换结果（已直接预览）") {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "转换结果",
+                        modifier = Modifier.fillMaxWidth().height(220.dp).background(Color.Black)
+                    )
+                }
+                if (lastOutputSize.isNotBlank()) Text(lastOutputSize, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(converted)
+            }
         }
         Text("提示：TIF 输出为未压缩格式；TIF 输入需先用其他应用转为常见格式。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
@@ -145,7 +156,8 @@ fun ImageResizeTool() {
     var widthText by remember { mutableStateOf("1080") }
     var heightText by remember { mutableStateOf("1920") }
     var format by remember { mutableStateOf("jpg") }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var error by remember { mutableStateOf("") }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it) } }
 
@@ -156,10 +168,10 @@ fun ImageResizeTool() {
         if (w <= 0 || h <= 0 || w > 12000 || h > 12000) { error = "尺寸需在 1~12000 之间"; return }
         error = ""
         val scaled = Bitmap.createScaledBitmap(bmp, w, h, true)
+        resultBitmap = scaled
         val mime = if (format == "png") "image/png" else "image/jpeg"
         val compress = if (format == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-        message = saveBitmapToGallery(context, scaled, mime, compress, 92, "RESIZE_${System.currentTimeMillis()}.$format") +
-            "\n新尺寸：$w × $h"
+        saved = saveBitmapMedia(context, scaled, mime, compress, 92, "RESIZE_${System.currentTimeMillis()}.$format")
     }
 
     Column(
@@ -182,7 +194,21 @@ fun ImageResizeTool() {
             Button(onClick = { run() }, enabled = bitmap != null, modifier = Modifier.fillMaxWidth()) { Text("调整尺寸并保存") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        val result = saved
+        if (result != null) {
+            SectionCard(title = "调整结果") {
+                resultBitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = "调整后",
+                        modifier = Modifier.fillMaxWidth().height(220.dp).background(Color.Black)
+                    )
+                    Text("新尺寸：${it.width} × ${it.height}", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(result)
+            }
+        }
     }
 }
 
@@ -202,7 +228,8 @@ fun IdPhotoTool() {
         "护照 390×567" to (390 to 567)
     )
     var preset by remember { mutableStateOf(presets.first().first) }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var error by remember { mutableStateOf("") }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it) } }
 
@@ -222,8 +249,8 @@ fun IdPhotoTool() {
         error = ""
         val (w, h) = presets.first { it.first == preset }.second
         val result = centerCrop(bmp, w, h)
-        message = saveBitmapToGallery(context, result, "image/jpeg", Bitmap.CompressFormat.JPEG, 95, "IDPHOTO_${System.currentTimeMillis()}.jpg") +
-            "\n输出尺寸：$w × $h px（300dpi 标准证件照）"
+        resultBitmap = result
+        saved = saveBitmapMedia(context, result, "image/jpeg", Bitmap.CompressFormat.JPEG, 95, "IDPHOTO_${System.currentTimeMillis()}.jpg")
     }
 
     Column(
@@ -240,7 +267,21 @@ fun IdPhotoTool() {
             Button(onClick = { run() }, enabled = bitmap != null, modifier = Modifier.fillMaxWidth()) { Text("生成证件照") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        val idResult = saved
+        if (idResult != null) {
+            SectionCard(title = "证件照结果") {
+                resultBitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = "证件照",
+                        modifier = Modifier.fillMaxWidth().height(260.dp).background(Color.Black)
+                    )
+                    Text("输出尺寸：${it.width} × ${it.height} px", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(idResult)
+            }
+        }
         Text("说明：自动居中裁剪为对应比例并缩放；换底色需要抠图，请用专业工具。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }
@@ -255,7 +296,9 @@ fun ImageCompressTool() {
     var quality by remember { mutableStateOf(70f) }
     var maxSize by remember { mutableStateOf("1920") }
     var format by remember { mutableStateOf("jpg") }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var outputInfo by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it) } }
 
@@ -272,8 +315,9 @@ fun ImageCompressTool() {
         if (format == "jpg") out.compress(Bitmap.CompressFormat.JPEG, quality.toInt(), bytes)
         else out.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality.toInt(), bytes)
         val mime = if (format == "jpg") "image/jpeg" else "image/webp"
-        message = saveBytesToGallery(context, bytes.toByteArray(), mime, "COMPRESS_${System.currentTimeMillis()}.$format") +
-            "\n压缩后大小：${sizeText(bytes.size())}"
+        resultBitmap = out
+        outputInfo = "输出尺寸：${out.width} × ${out.height} · 大小：${sizeText(bytes.size())}"
+        saved = saveMedia(context, bytes.toByteArray(), mime, "COMPRESS_${System.currentTimeMillis()}.$format")
     }
 
     Column(
@@ -296,7 +340,21 @@ fun ImageCompressTool() {
             Button(onClick = { run() }, enabled = bitmap != null, modifier = Modifier.fillMaxWidth()) { Text("压缩并保存") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        val compressResult = saved
+        if (compressResult != null) {
+            SectionCard(title = "压缩结果") {
+                resultBitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = "压缩后",
+                        modifier = Modifier.fillMaxWidth().height(220.dp).background(Color.Black)
+                    )
+                    Text(outputInfo, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(compressResult)
+            }
+        }
     }
 }
 
@@ -313,7 +371,7 @@ fun ImageCropTool() {
     var offsetY by remember { mutableStateOf(0f) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var cropped by remember { mutableStateOf<Bitmap?>(null) }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it) } }
 
@@ -348,12 +406,12 @@ fun ImageCropTool() {
         val srcW = (cropW / dispW * bmp.width).toInt().coerceAtLeast(1)
         val srcH = (cropH / dispH * bmp.height).toInt().coerceAtLeast(1)
         cropped = Bitmap.createBitmap(bmp, srcX, srcY, minOf(srcW, bmp.width - srcX), minOf(srcH, bmp.height - srcY))
-        message = ""
+        saved = null
     }
 
     fun saveCrop() {
         val c = cropped ?: run { error = "请先裁剪"; return }
-        message = saveBitmapToGallery(context, c, "image/jpeg", Bitmap.CompressFormat.JPEG, 95, "CROP_${System.currentTimeMillis()}.jpg")
+        saved = saveBitmapMedia(context, c, "image/jpeg", Bitmap.CompressFormat.JPEG, 95, "CROP_${System.currentTimeMillis()}.jpg")
     }
 
     Column(
@@ -422,7 +480,17 @@ fun ImageCropTool() {
             }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        val cropSaved = saved
+        if (cropSaved != null) {
+            SectionCard(title = "裁剪结果") {
+                cropped?.let {
+                    Image(it.asImageBitmap(), "裁剪结果", Modifier.fillMaxWidth().height(180.dp))
+                    Text("尺寸：${it.width} × ${it.height}", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(cropSaved)
+            }
+        }
     }
 }
 
@@ -434,7 +502,8 @@ fun ImageStitchTool() {
     val context = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var vertical by remember { mutableStateOf(true) }
-    var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var error by remember { mutableStateOf("") }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris = it.take(9) }
 
@@ -452,8 +521,8 @@ fun ImageStitchTool() {
             if (vertical) { canvas.drawBitmap(bmp, 0f, pos.toFloat(), null); pos += bmp.height }
             else { canvas.drawBitmap(bmp, pos.toFloat(), 0f, null); pos += bmp.width }
         }
-        message = saveBitmapToGallery(context, out, "image/jpeg", Bitmap.CompressFormat.JPEG, 92, "STITCH_${System.currentTimeMillis()}.jpg") +
-            "\n拼接后：${out.width} × ${out.height}"
+        resultBitmap = out
+        saved = saveBitmapMedia(context, out, "image/jpeg", Bitmap.CompressFormat.JPEG, 92, "STITCH_${System.currentTimeMillis()}.jpg")
     }
 
     Column(
@@ -470,6 +539,20 @@ fun ImageStitchTool() {
             Button(onClick = { run() }, enabled = uris.size >= 2, modifier = Modifier.fillMaxWidth()) { Text("开始拼接") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        val stitchSaved = saved
+        if (stitchSaved != null) {
+            SectionCard(title = "拼接结果") {
+                resultBitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = "拼接后",
+                        modifier = Modifier.fillMaxWidth().height(260.dp).background(Color.Black)
+                    )
+                    Text("拼接后：${it.width} × ${it.height}", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(10.dp))
+                MediaResultActions(stitchSaved)
+            }
+        }
     }
 }

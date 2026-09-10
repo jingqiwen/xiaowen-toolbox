@@ -13,8 +13,8 @@ android {
         applicationId = "com.jisuanyusuiji.toolbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.4.0"
+        versionCode = 9
+        versionName = "0.5.0"
     }
 
     signingConfigs {
@@ -82,6 +82,12 @@ dependencies {
     implementation("androidx.media3:media3-common:1.5.1")
     implementation("androidx.media3:media3-effect:1.5.1")
     implementation("androidx.media3:media3-transformer:1.5.1")
+
+    // 镜子：CameraX 前置摄像头预览
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

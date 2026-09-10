@@ -287,42 +287,86 @@ fun ScientificCalculatorTool() {
 fun CasioCalculatorTool() {
     var expression by remember { mutableStateOf("") }
     var resultText by remember { mutableStateOf("") }
+    var degrees by remember { mutableStateOf(true) }
+    var shift by remember { mutableStateOf(false) }
+    var memory by remember { mutableStateOf(0.0) }
+    var ans by remember { mutableStateOf(0.0) }
+    var error by remember { mutableStateOf("") }
 
     fun press(key: String) {
+        error = ""
         when (key) {
             "AC" -> { expression = ""; resultText = "" }
-            "DEL" -> expression = expression.dropLast(1)
+            "DEL", "⌫" -> expression = expression.dropLast(1)
             "=" -> {
                 if (expression.isBlank()) return
-                val r = CalcExpr.evaluate(expression)
-                resultText = if (r.ok && r.value != null) formatNumber(r.value) else (r.error ?: "Error")
+                val r = CalcExpr.evaluate(expression, degrees)
+                if (r.ok && r.value != null) {
+                    ans = r.value
+                    resultText = formatNumber(r.value)
+                } else {
+                    resultText = r.error ?: "Error"
+                }
             }
-            "√" -> expression += "sqrt("
-            "x²" -> expression += "^2"
-            "xⁿ" -> expression += "^"
-            "log" -> expression += "log("
-            "ln" -> expression += "ln("
+            "SHIFT" -> shift = !shift
+            "DEG/RAD" -> degrees = !degrees
+            "M+" -> memory += resultText.toDoubleOrNull() ?: ans
+            "M-" -> memory -= resultText.toDoubleOrNull() ?: ans
+            "MR" -> expression += formatNumber(memory)
+            "MC" -> memory = 0.0
+            "Ans" -> expression += formatNumber(ans)
+            "nCr" -> expression += "ncr("
+            "nPr" -> expression += "npr("
+            "10^" -> expression += "10^("
+            "e^" -> expression += "e^("
             else -> expression += key
         }
     }
 
     val keyRows = listOf(
-        listOf("SHIFT", "ALPHA", "MODE", "DEL", "AC"),
-        listOf("√", "x²", "xⁿ", "log", "ln"),
+        listOf("SHIFT", "ALPHA", "MODE", if (degrees) "DEG" else "RAD", "DEL", "AC"),
+        listOf(if (shift) "sin⁻¹" else "sin", if (shift) "cos⁻¹" else "cos", if (shift) "tan⁻¹" else "tan", if (shift) "10^" else "log", if (shift) "e^" else "ln"),
+        listOf("x²", "x³", "xⁿ", "√", "∛"),
+        listOf("nCr", "nPr", "π", "e", "!"),
         listOf("7", "8", "9", "(", ")"),
         listOf("4", "5", "6", "×", "÷"),
         listOf("1", "2", "3", "+", "-"),
-        listOf("0", ".", "%", "⌫", "=")
+        listOf("0", ".", "Ans", "%", "="),
+        listOf("M+", "M-", "MR", "MC", "1/x")
     )
+
+    fun keyAction(key: String) {
+        when (key) {
+            "SHIFT" -> press("SHIFT")
+            "DEG", "RAD" -> press("DEG/RAD")
+            "sin", "cos", "tan" -> expression += "$key("
+            "sin⁻¹" -> expression += "asin("
+            "cos⁻¹" -> expression += "acos("
+            "tan⁻¹" -> expression += "atan("
+            "log" -> expression += "log("
+            "ln" -> expression += "ln("
+            "10^" -> expression += "10^("
+            "e^" -> expression += "e^("
+            "√" -> expression += "sqrt("
+            "∛" -> expression += "cbrt("
+            "x²" -> expression += "^2"
+            "x³" -> expression += "^3"
+            "xⁿ" -> expression += "^"
+            "1/x" -> expression += "1/("
+            "!" -> expression += "!"
+            "π" -> expression += "pi"
+            else -> press(key)
+        }
+    }
 
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // 卡西欧风格显示屏
+        // 显示屏
         Box(
             Modifier
                 .fillMaxWidth()
@@ -335,17 +379,28 @@ fun CasioCalculatorTool() {
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("fx-82 STYLE", fontSize = 11.sp, color = Color(0xFF33523A))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        "fx-991 STYLE" + if (shift) "  ·  SHIFT" else "",
+                        fontSize = 11.sp,
+                        color = Color(0xFF33523A)
+                    )
+                    Text(
+                        (if (degrees) "DEG" else "RAD") + if (memory != 0.0) "  M" else "",
+                        fontSize = 11.sp,
+                        color = Color(0xFF33523A)
+                    )
+                }
                 Text(
                     expression.ifBlank { "0" },
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     color = Color(0xFF1B2B1D),
                     textAlign = TextAlign.End,
                     maxLines = 3
                 )
                 Text(
-                    resultText,
-                    fontSize = 32.sp,
+                    resultText.ifBlank { "" },
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0E1A10),
                     textAlign = TextAlign.End,
@@ -353,41 +408,49 @@ fun CasioCalculatorTool() {
                 )
             }
         }
+        if (error.isNotBlank()) {
+            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
 
         keyRows.forEach { row ->
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 row.forEach { key ->
                     val decoration = key in setOf("SHIFT", "ALPHA", "MODE")
                     val container = when {
+                        key == "SHIFT" && shift -> Color(0xFFEF6C00)
                         key == "AC" || key == "=" -> Color(0xFF2E7D32)
                         decoration -> Color(0xFF5D4037)
-                        key in setOf("DEL", "⌫", "√", "x²", "xⁿ", "log", "ln") -> Color(0xFF546E7A)
+                        key in setOf("DEL", "⌫", "√", "∛", "x²", "x³", "xⁿ", "log", "ln", "10^", "e^", "sin", "cos", "tan", "sin⁻¹", "cos⁻¹", "tan⁻¹") -> Color(0xFF546E7A)
                         else -> Color(0xFF37474F)
                     }
                     Button(
-                        onClick = { if (!decoration) press(key) },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = container,
-                            contentColor = Color.White
-                        ),
+                        onClick = { if (!decoration || key == "SHIFT") keyAction(key) },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = Color.White),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                     ) {
-                        Text(key, fontSize = if (key.length > 2) 10.sp else 16.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            key,
+                            fontSize = if (key.length > 3) 9.sp else if (key.length > 2) 11.sp else 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
+
         Text(
-            "CASIO 风格界面模拟（仅外观风格，与 CASIO 公司无关）",
+            "功能：四则运算、括号、幂、阶乘、百分号、平方/立方、开平方/开立方、sin/cos/tan 与反三角、log/ln、10^x/e^x、排列组合 nCr/nPr、π/e、Ans、记忆 M+/M-/MR/MC、DEG/RAD 切换。\n" +
+                "仅外观风格参考 CASIO，与 CASIO 公司无关。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
     }
 }
+
 
 // ---------- 历史存储 ----------
 

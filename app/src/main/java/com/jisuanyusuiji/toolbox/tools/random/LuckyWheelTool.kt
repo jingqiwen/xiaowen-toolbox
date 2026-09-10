@@ -15,15 +15,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
@@ -48,11 +52,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.data.JsonStore
 import com.jisuanyusuiji.toolbox.ui.Sfx
+import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.LabeledField
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 private data class WheelItem(val name: String, val color: Long, val weight: Int)
@@ -63,23 +68,18 @@ private val PALETTE = listOf(
 )
 
 private fun defaultWheelItems() = listOf(
-    WheelItem("一等奖", 0xFFE53935, 1),
-    WheelItem("二等奖", 0xFFFB8C00, 2),
-    WheelItem("三等奖", 0xFFFDD835, 3),
-    WheelItem("四等奖", 0xFF43A047, 4),
-    WheelItem("谢谢参与", 0xFF8E24AA, 5),
-    WheelItem("再来一次", 0xFF1E88E5, 2)
+    WheelItem("选项一", 0xFFE53935, 1),
+    WheelItem("选项二", 0xFFFB8C00, 1),
+    WheelItem("选项三", 0xFFFDD835, 1),
+    WheelItem("选项四", 0xFF43A047, 1),
+    WheelItem("选项五", 0xFF1E88E5, 1),
+    WheelItem("选项六", 0xFF8E24AA, 1)
 )
 
 private fun itemsToArray(items: List<WheelItem>): JSONArray {
     val arr = JSONArray()
     items.forEach { item ->
-        arr.put(
-            JSONObject()
-                .put("name", item.name)
-                .put("color", item.color)
-                .put("weight", item.weight)
-        )
+        arr.put(JSONObject().put("name", item.name).put("color", item.color).put("weight", item.weight))
     }
     return arr
 }
@@ -88,11 +88,7 @@ private fun arrayToItems(arr: JSONArray): List<WheelItem> =
     (0 until arr.length()).mapNotNull { i ->
         try {
             val o = arr.getJSONObject(i)
-            WheelItem(
-                name = o.getString("name"),
-                color = o.getLong("color"),
-                weight = o.getInt("weight").coerceAtLeast(1)
-            )
+            WheelItem(o.getString("name"), o.getLong("color"), o.getInt("weight").coerceAtLeast(1))
         } catch (_: Exception) {
             null
         }
@@ -111,27 +107,24 @@ fun LuckyWheelTool() {
     var removeAfterWin by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
-
-    var showAdd by remember { mutableStateOf(false) }
-    var editName by remember { mutableStateOf("") }
-    var editWeight by remember { mutableStateOf("1") }
-    var editColor by remember { mutableStateOf(PALETTE.first()) }
-
+    var showEditor by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
     var showLoad by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
 
-    fun persistCurrent() {
+    fun persist() {
         store.putArray("current", itemsToArray(items))
     }
 
     fun updateItems(newItems: List<WheelItem>) {
         items = newItems
-        persistCurrent()
+        persist()
     }
 
     fun spin() {
         if (items.isEmpty() || spinning) return
+        error = ""
         Sfx.tick()
         val total = items.sumOf { it.weight }
         val r = Random.nextInt(total)
@@ -139,10 +132,7 @@ fun LuckyWheelTool() {
         var acc = 0
         for (i in items.indices) {
             acc += items[i].weight
-            if (r < acc) {
-                chosenIndex = i
-                break
-            }
+            if (r < acc) { chosenIndex = i; break }
         }
         var before = 0f
         for (i in 0 until chosenIndex) before += items[i].weight
@@ -175,7 +165,12 @@ fun LuckyWheelTool() {
     ) {
         SectionCard(title = "🎡 幸运转盘") {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.size(280.dp)) {
+                Canvas(
+                    Modifier
+                        .size(280.dp)
+                        .clickable { showEditor = true }
+                ) {
+                    if (items.isEmpty()) return@Canvas
                     val total = items.sumOf { it.weight }.toFloat()
                     val cx = size.width / 2f
                     val cy = size.height / 2f
@@ -201,10 +196,7 @@ fun LuckyWheelTool() {
                         )
                         var angle = start + sweep / 2f
                         var flip = false
-                        if (angle > 90f && angle < 270f) {
-                            angle += 180f
-                            flip = true
-                        }
+                        if (angle > 90f && angle < 270f) { angle += 180f; flip = true }
                         drawIntoCanvas { canvas ->
                             canvas.save()
                             canvas.translate(cx, cy)
@@ -216,11 +208,9 @@ fun LuckyWheelTool() {
                         }
                         cumulative += item.weight
                     }
-                    // 外圈与中心装饰
                     drawCircle(Color.White, radius = radius, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
-                    drawCircle(Color(0xFFFFFFFF), radius = 26.dp.toPx(), center = Offset(cx, cy))
+                    drawCircle(Color.White, radius = 26.dp.toPx(), center = Offset(cx, cy))
                     drawCircle(Color(0xFF37474F), radius = 22.dp.toPx(), center = Offset(cx, cy))
-                    // 顶部指针
                     val pointer = Path().apply {
                         moveTo(cx - 14.dp.toPx(), 2.dp.toPx())
                         lineTo(cx + 14.dp.toPx(), 2.dp.toPx())
@@ -230,6 +220,14 @@ fun LuckyWheelTool() {
                     drawPath(pointer, Color(0xFFD32F2F))
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "💡 点击转盘即可编辑：每个部分的名称、权重（占比）、颜色，可增删",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             result?.let {
                 Spacer(Modifier.height(8.dp))
@@ -244,11 +242,14 @@ fun LuckyWheelTool() {
             }
 
             Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { spin() },
-                enabled = items.isNotEmpty() && !spinning,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text(if (spinning) "转动中…" else "🎡 开始转动", style = MaterialTheme.typography.titleMedium) }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { showEditor = true }, modifier = Modifier.weight(1f)) { Text("✏️ 编辑转盘") }
+                Button(
+                    onClick = { spin() },
+                    enabled = items.isNotEmpty() && !spinning,
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (spinning) "转动中…" else "🎡 开始转动") }
+            }
 
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -264,84 +265,20 @@ fun LuckyWheelTool() {
             }
         }
 
-        SectionCard(title = "条目（点击颜色可修改，权重越大越容易被抽中）") {
-            items.forEachIndexed { index, item ->
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(18.dp)
-                            .background(Color(item.color.toInt()), CircleShape)
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.name, style = MaterialTheme.typography.bodyLarge)
-                        Text("权重 ${item.weight}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick = {
-                        updateItems(items.filterIndexed { i, _ -> i != index })
-                    }) { Text("删除", color = MaterialTheme.colorScheme.error) }
-                }
-            }
-            if (items.isEmpty()) {
-                Text("暂无条目，请添加", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(6.dp))
-            OutlinedButton(onClick = {
-                editName = ""
-                editWeight = "1"
-                editColor = PALETTE.first()
-                showAdd = true
-            }, modifier = Modifier.fillMaxWidth()) { Text("＋ 添加条目") }
-        }
-
         SectionCard(title = "模板") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) {
-                    Text("💾 保存模板")
-                }
-                OutlinedButton(onClick = { showLoad = true }, modifier = Modifier.weight(1f)) {
-                    Text("📂 载入模板")
-                }
+                OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("💾 保存模板") }
+                OutlinedButton(onClick = { showLoad = true }, modifier = Modifier.weight(1f)) { Text("📂 载入模板") }
             }
         }
+        ErrorText(error)
     }
 
-    if (showAdd) {
-        AlertDialog(
-            onDismissRequest = { showAdd = false },
-            title = { Text("添加转盘条目") },
-            text = {
-                Column {
-                    LabeledField(editName, { editName = it }, "条目文字")
-                    Spacer(Modifier.height(8.dp))
-                    LabeledField(editWeight, { editWeight = it }, "权重（整数，默认 1）", keyboardType = KeyboardType.Number)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PALETTE.forEach { color ->
-                            Box(
-                                Modifier
-                                    .size(32.dp)
-                                    .background(Color(color.toInt()), CircleShape)
-                                    .clickable { editColor = color }
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val name = editName.trim()
-                    val weight = editWeight.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                    if (name.isNotEmpty()) {
-                        updateItems(items + WheelItem(name, editColor, weight))
-                        showAdd = false
-                    }
-                }) { Text("添加") }
-            },
-            dismissButton = { TextButton(onClick = { showAdd = false }) { Text("取消") } }
+    if (showEditor) {
+        WheelEditorDialog(
+            items = items,
+            onChange = { updateItems(it) },
+            onDismiss = { showEditor = false }
         )
     }
 
@@ -349,16 +286,13 @@ fun LuckyWheelTool() {
         AlertDialog(
             onDismissRequest = { showSave = false },
             title = { Text("保存转盘模板") },
-            text = {
-                LabeledField(saveName, { saveName = it }, "模板名称")
-            },
+            text = { LabeledField(saveName, { saveName = it }, "模板名称") },
             confirmButton = {
                 TextButton(onClick = {
                     val name = saveName.trim()
                     if (name.isNotEmpty()) {
                         store.putArray(name, itemsToArray(items))
-                        saveName = ""
-                        showSave = false
+                        saveName = ""; showSave = false
                     }
                 }) { Text("保存") }
             },
@@ -372,24 +306,19 @@ fun LuckyWheelTool() {
             onDismissRequest = { showLoad = false },
             title = { Text("载入转盘模板") },
             text = {
-                Column {
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
                     if (keys.isEmpty()) {
                         Text("还没有保存过模板", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         keys.forEach { key ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(key, modifier = Modifier.weight(1f))
                                 TextButton(onClick = {
                                     val loaded = arrayToItems(store.getArray(key))
                                     if (loaded.isNotEmpty()) updateItems(loaded)
                                     showLoad = false
                                 }) { Text("载入") }
-                                TextButton(onClick = { store.remove(key) }) {
-                                    Text("删除", color = MaterialTheme.colorScheme.error)
-                                }
+                                TextButton(onClick = { store.remove(key) }) { Text("删除", color = MaterialTheme.colorScheme.error) }
                             }
                         }
                     }
@@ -398,4 +327,96 @@ fun LuckyWheelTool() {
             confirmButton = { TextButton(onClick = { showLoad = false }) { Text("关闭") } }
         )
     }
+}
+
+@Composable
+private fun WheelEditorDialog(
+    items: List<WheelItem>,
+    onChange: (List<WheelItem>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val totalWeight = items.sumOf { it.weight }.coerceAtLeast(1)
+
+    fun update(index: Int, name: String? = null, weight: Int? = null, color: Long? = null) {
+        val list = items.toMutableList()
+        val old = list[index]
+        list[index] = old.copy(
+            name = name ?: old.name,
+            weight = weight?.coerceAtLeast(1) ?: old.weight,
+            color = color ?: old.color
+        )
+        onChange(list)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑转盘（点击色块换颜色）") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "权重 = 该部分占的比例，权重越大越容易抽中。下方显示实际占比。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                items.forEachIndexed { index, item ->
+                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Column(Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(
+                                    value = item.name,
+                                    onValueChange = { update(index, name = it) },
+                                    label = { Text("名称") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                OutlinedTextField(
+                                    value = item.weight.toString(),
+                                    onValueChange = { text ->
+                                        val w = text.filter { it.isDigit() }.toIntOrNull() ?: 1
+                                        update(index, weight = w)
+                                    },
+                                    label = { Text("权重") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.width(86.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .background(Color(item.color.toInt()), CircleShape)
+                                        .clickable {
+                                            val currentIndex = PALETTE.indexOf(item.color).let { if (it < 0) 0 else it }
+                                            update(index, color = PALETTE[(currentIndex + 1) % PALETTE.size])
+                                        }
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "占比：${"%.1f".format(item.weight * 100f / totalWeight)}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { onChange(items.filterIndexed { i, _ -> i != index }) }) {
+                                    Text("删除", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        onChange(items + WheelItem("新选项", PALETTE[items.size % PALETTE.size], 1))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("＋ 添加一个部分") }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
+    )
 }

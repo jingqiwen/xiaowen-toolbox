@@ -142,61 +142,145 @@ fun GeometryTool() {
 // ============================================================
 @Composable
 fun RatioTool() {
+    var mode by remember { mutableStateOf("解比例 A:B=C:D") }
     var a by remember { mutableStateOf("2") }
     var b by remember { mutableStateOf("6") }
     var c by remember { mutableStateOf("5") }
     var d by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf("") }
+    var ratioText by remember { mutableStateOf("2:3:5") }
+    var totalText by remember { mutableStateOf("1000") }
+    var result by remember { mutableStateOf(listOf<String>()) }
     var error by remember { mutableStateOf("") }
+
+    fun parseRatio(text: String): List<Double>? {
+        val parts = text.split(':', '：', ',', '，').map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.size < 2) return null
+        val nums = parts.map { it.toDoubleOrNull() ?: return null }
+        if (nums.any { it <= 0 }) return null
+        return nums
+    }
+
+    fun gcdLong(x: Long, y: Long): Long = if (y == 0L) x else gcdLong(y, x % y)
 
     fun solve() {
         error = ""
-        result = ""
-        val values = listOf(a, b, c, d).map { it.trim() }
-        val blanks = values.count { it.isEmpty() }
-        if (blanks != 1) {
-            error = "请只留空一个未知项（A:B = C:D）"
-            return
+        result = emptyList()
+        when (mode) {
+            "解比例 A:B=C:D" -> {
+                val values = listOf(a, b, c, d).map { it.trim() }
+                if (values.count { it.isEmpty() } != 1) { error = "请只留空一个未知项"; return }
+                val nums = values.map { it.toDoubleOrNull() }
+                val idx = nums.indexOfFirst { it == null }
+                if (idx < 0) { error = "请至少留空一个未知项"; return }
+                val known = nums.filterIndexed { i, _ -> i != idx }.map { it!! }
+                val denominator = when (idx) {
+                    0 -> known[2]
+                    1 -> known[1]
+                    2 -> known[1]
+                    else -> known[0]
+                }
+                if (denominator == 0.0) { error = "除数为 0，无法求解"; return }
+                val value = when (idx) {
+                    0 -> known[0] * known[1] / known[2]
+                    1 -> known[0] * known[2] / known[1]
+                    2 -> known[0] * known[2] / known[1]
+                    else -> known[1] * known[2] / known[0]
+                }
+                result = listOf("${listOf("A", "B", "C", "D")[idx]} = ${f2(value)}")
+            }
+            "比例化简" -> {
+                val nums = parseRatio(ratioText) ?: run { error = "请输入如 6:9 或 2:3:4 的比例"; return }
+                val allInt = nums.all { it == it.toLong().toDouble() }
+                val label = ratioText.trim()
+                if (allInt) {
+                    val longs = nums.map { it.toLong() }
+                    var g = longs[0]
+                    longs.drop(1).forEach { g = gcdLong(g, it) }
+                    val simplest = longs.map { it / g }
+                    result = listOf(
+                        "原比例：$label",
+                        "最简整数比：${simplest.joinToString(":")}",
+                        "比值（前项÷后项）：${f2(nums[0] / nums[1])}"
+                    )
+                } else {
+                    val min = nums.min()
+                    result = listOf("原比例：$label", "统一化简（除以最小值）：${nums.joinToString(":") { f2(it / min) }}")
+                }
+            }
+            "按比例分配" -> {
+                val nums = parseRatio(ratioText) ?: run { error = "请输入如 2:3:5 的比例"; return }
+                val total = totalText.trim().toDoubleOrNull() ?: run { error = "请输入有效总金额/总量"; return }
+                val sum = nums.sum()
+                result = nums.mapIndexed { index, value ->
+                    "第 ${index + 1} 份（占比 ${f2(value / sum * 100)}%）：${f2(total * value / sum)}"
+                }
+            }
+            else -> {
+                val nums = parseRatio(ratioText) ?: run { error = "请输入如 2:3:5 的比例"; return }
+                val sum = nums.sum()
+                result = nums.mapIndexed { index, value ->
+                    "第 ${index + 1} 项：${f2(value / sum * 100)}%"
+                }
+            }
         }
-        val nums = values.map { it.toDoubleOrNull() }
-        val idx = nums.indexOfFirst { it == null }
-        val known = nums.filterIndexed { i, _ -> i != idx }.map { it!! }
-        val denominator = when (idx) {
-            0 -> known[1] // A = B*C/D
-            1 -> known[0] // B = A*D/C
-            2 -> known[2] // C = A*D/B
-            else -> known[1] // D = B*C/A
-        }
-        if (denominator == 0.0) { error = "比例中除数为 0，无法求解"; return }
-        val value = when (idx) {
-            0 -> known[0] * known[1] / known[2] // B*C/D (known=[B,C,D])
-            1 -> known[0] * known[2] / known[1] // A*D/C (known=[A,C,D])
-            2 -> known[0] * known[2] / known[1] // A*D/B (known=[A,B,D])
-            else -> known[1] * known[2] / known[0] // B*C/A (known=[A,B,C])
-        }
-        result = "${listOf("A", "B", "C", "D")[idx]} = ${f2(value)}"
     }
 
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SectionCard(title = "A : B = C : D（留空一项求解）") {
-            LabeledField(a, { a = it }, "A", keyboardType = KeyboardType.Decimal)
-            Spacer(Modifier.height(8.dp))
-            LabeledField(b, { b = it }, "B", keyboardType = KeyboardType.Decimal)
-            Spacer(Modifier.height(8.dp))
-            LabeledField(c, { c = it }, "C", keyboardType = KeyboardType.Decimal)
-            Spacer(Modifier.height(8.dp))
-            LabeledField(d, { d = it }, "D（未知请留空）", keyboardType = KeyboardType.Decimal)
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = { solve() }, modifier = Modifier.fillMaxWidth()) { Text("求解未知项") }
+        SectionCard(title = "功能") {
+            ChoiceChips(
+                options = listOf("解比例 A:B=C:D", "比例化简", "按比例分配", "比例转百分比"),
+                selected = mode,
+                onSelect = { mode = it; result = emptyList(); error = "" },
+                label = { it }
+            )
         }
-        ErrorText(error)
-        if (result.isNotBlank()) {
-            SectionCard(title = "结果") {
-                Text(result, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        SectionCard(title = mode) {
+            when (mode) {
+                "解比例 A:B=C:D" -> {
+                    LabeledField(a, { a = it }, "A", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(8.dp))
+                    LabeledField(b, { b = it }, "B", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(8.dp))
+                    LabeledField(c, { c = it }, "C", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(8.dp))
+                    LabeledField(d, { d = it }, "D（未知项请留空）", keyboardType = KeyboardType.Decimal)
+                }
+                "按比例分配" -> {
+                    LabeledField(totalText, { totalText = it }, "总金额 / 总量（如 1000）", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(8.dp))
+                    LabeledField(ratioText, { ratioText = it }, "比例（如 2:3:5）")
+                }
+                else -> LabeledField(ratioText, { ratioText = it }, "比例（如 6:9 或 2:3:4）")
             }
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { solve() }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (mode == "解比例 A:B=C:D") "求解未知项" else "计算")
+            }
+        }
+
+        ErrorText(error)
+        if (result.isNotEmpty()) {
+            SectionCard(title = "结果") {
+                result.forEach { line ->
+                    Text(line, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+        }
+
+        SectionCard(title = "知识点") {
+            Text(
+                "• 比例的基本性质：内项之积 = 外项之积（A×D = B×C）。\n" +
+                    "• 比例化简：各项同时除以最大公约数。\n" +
+                    "• 按比例分配：每份 = 总量 ÷ 比例之和 × 该项比例。\n" +
+                    "• 比例与百分比：某项占比 = 该项 ÷ 各项之和 × 100%。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

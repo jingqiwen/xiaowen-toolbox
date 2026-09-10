@@ -1,5 +1,6 @@
 package com.jisuanyusuiji.toolbox.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.Prefs
@@ -164,7 +167,15 @@ private fun ToolCard(tool: ToolDef, onClick: () -> Unit, modifier: Modifier = Mo
         modifier = modifier.heightIn(min = 104.dp)
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text(tool.icon, style = MaterialTheme.typography.headlineSmall)
+            if (tool.iconRes != null) {
+                Image(
+                    painter = painterResource(tool.iconRes),
+                    contentDescription = tool.name,
+                    modifier = Modifier.size(28.dp)
+                )
+            } else {
+                Text(tool.icon, style = MaterialTheme.typography.headlineSmall)
+            }
             Spacer(Modifier.height(6.dp))
             Text(tool.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
             Text(
@@ -190,7 +201,15 @@ private fun MiniToolCard(tool: ToolDef, onClick: () -> Unit) {
             Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(tool.icon)
+            if (tool.iconRes != null) {
+                Image(
+                    painter = painterResource(tool.iconRes),
+                    contentDescription = tool.name,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Text(tool.icon)
+            }
             Spacer(Modifier.width(8.dp))
             Text(tool.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

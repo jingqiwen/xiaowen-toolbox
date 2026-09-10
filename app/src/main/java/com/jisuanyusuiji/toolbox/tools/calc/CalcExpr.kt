@@ -27,7 +27,7 @@ object CalcExpr {
         val ok: Boolean get() = error == null
     }
 
-    fun evaluate(input: String): EvalResult {
+    fun evaluate(input: String, degrees: Boolean = false): EvalResult {
         if (input.isBlank()) return EvalResult(error = "请输入表达式")
         return try {
             val normalized = input
@@ -36,13 +36,13 @@ object CalcExpr {
                 .replace("−", "-")
                 .replace("π", "pi")
                 .replace("％", "%")
-            EvalResult(value = Parser(normalized).parse())
+            EvalResult(value = Parser(normalized, degrees).parse())
         } catch (e: Exception) {
             EvalResult(error = e.message ?: "表达式格式错误")
         }
     }
 
-    private class Parser(src: String) {
+    private class Parser(src: String, private val degrees: Boolean) {
         private val s = src.lowercase()
         private var pos = 0
 
@@ -148,10 +148,17 @@ object CalcExpr {
             skipSpaces()
             if (peek() == '(') {
                 pos++
-                val arg = expression()
+                val first = expression()
                 skipSpaces()
+                if (peek() == ',') {
+                    pos++
+                    val second = expression()
+                    skipSpaces()
+                    expect(')')
+                    return function2(name, first, second)
+                }
                 expect(')')
-                return function(name, arg)
+                return function(name, first)
             }
             return when (name) {
                 "pi" -> kotlin.math.PI
@@ -160,22 +167,49 @@ object CalcExpr {
             }
         }
 
+        private fun toRadians(x: Double): Double = if (degrees) Math.toRadians(x) else x
+        private fun fromRadians(x: Double): Double = if (degrees) Math.toDegrees(x) else x
+
         private fun function(name: String, x: Double): Double = when (name) {
-            "sin" -> sin(x)
-            "cos" -> cos(x)
-            "tan" -> tan(x)
-            "asin", "arcsin" -> asin(x)
-            "acos", "arccos" -> acos(x)
-            "atan", "arctan" -> atan(x)
+            "sin" -> sin(toRadians(x))
+            "cos" -> cos(toRadians(x))
+            "tan" -> tan(toRadians(x))
+            "asin", "arcsin" -> fromRadians(asin(x))
+            "acos", "arccos" -> fromRadians(acos(x))
+            "atan", "arctan" -> fromRadians(atan(x))
             "sinh" -> sinh(x)
             "cosh" -> cosh(x)
             "tanh" -> tanh(x)
             "log" -> if (x <= 0) fail("log 参数必须大于 0") else log10(x)
             "ln" -> if (x <= 0) fail("ln 参数必须大于 0") else ln(x)
             "sqrt" -> if (x < 0) fail("sqrt 参数不能为负数") else sqrt(x)
+            "cbrt" -> Math.cbrt(x)
             "abs" -> abs(x)
             "exp" -> exp(x)
             else -> fail("不支持的函数：$name")
+        }
+
+        private fun function2(name: String, x: Double, y: Double): Double = when (name) {
+            "ncr", "c" -> combination(x, y)
+            "npr", "p" -> permutation(x, y)
+            "log" -> {
+                if (x <= 0 || y <= 0 || y == 1.0) fail("log 底数/真数无效") else ln(x) / ln(y)
+            }
+            else -> fail("不支持的双参数函数：$name")
+        }
+
+        private fun combination(n: Double, r: Double): Double {
+            if (r < 0 || n < 0 || r > n) fail("组合数参数无效")
+            var result = 1.0
+            for (i in 1..r.toInt()) result = result * (n - r.toInt() + i) / i
+            return result
+        }
+
+        private fun permutation(n: Double, r: Double): Double {
+            if (r < 0 || n < 0 || r > n) fail("排列数参数无效")
+            var result = 1.0
+            for (i in 0 until r.toInt()) result *= (n - i)
+            return result
         }
 
         private fun number(): Double {

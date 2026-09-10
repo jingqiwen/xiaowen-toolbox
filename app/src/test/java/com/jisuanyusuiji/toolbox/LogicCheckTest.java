@@ -33,8 +33,8 @@ public class LogicCheckTest {
 
     @Test
     public void calcExpression() {
-        assertEquals(13.9, CalcExpr.INSTANCE.evaluate("2*(3+4)-10%").getValue(), 1e-9);
-        assertEquals(18.0, CalcExpr.INSTANCE.evaluate("sqrt(16)+3!+2^3").getValue(), 1e-9);
+        assertEquals(13.9, CalcExpr.INSTANCE.evaluate("2*(3+4)-10%", false).getValue(), 1e-9);
+        assertEquals(18.0, CalcExpr.INSTANCE.evaluate("sqrt(16)+3!+2^3", false).getValue(), 1e-9);
     }
 
     @Test

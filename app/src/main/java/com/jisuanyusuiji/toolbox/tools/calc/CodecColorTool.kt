@@ -41,7 +41,7 @@ import java.util.Base64
 // ============================================================
 @Composable
 fun Base64Tool() {
-    var input by remember { mutableStateOf("Hello, 小温工具箱!") }
+    var input by remember { mutableStateOf("hello，我是温景淇") }
     var output by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var lastAction by remember { mutableStateOf("") }

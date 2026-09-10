@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.JsonStore
+import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.InfoRow
 import com.jisuanyusuiji.toolbox.ui.components.LabeledField
@@ -40,28 +41,68 @@ private fun d2(text: String): Double? = text.trim().toDoubleOrNull()
 private fun money2(v: Double): String = BigDecimal(v).setScale(2, RoundingMode.HALF_UP).toPlainString()
 
 // ============================================================
-// 42. BMI 计算器
+// 42. BMI 计算器（性别 + 分析）
 // ============================================================
 @Composable
 fun BmiTool() {
+    var gender by remember { mutableStateOf("男") }
+    var age by remember { mutableStateOf("25") }
     var height by remember { mutableStateOf("175") }
     var weight by remember { mutableStateOf("70") }
     var result by remember { mutableStateOf("") }
-    var advice by remember { mutableStateOf("") }
+    var details by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+    var analysis by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
     fun calc() {
         error = ""
-        val h = d2(height)?.div(100.0)
+        result = ""
+        details = emptyList()
+        analysis = ""
+        val hCm = d2(height)
         val w = d2(weight)
-        if (h == null || h <= 0 || w == null || w <= 0) { error = "请输入有效身高和体重"; return }
+        val a = d2(age)
+        if (hCm == null || hCm <= 0 || w == null || w <= 0 || a == null || a <= 0) {
+            error = "请输入有效身高、体重和年龄"
+            return
+        }
+        if (hCm < 80 || hCm > 250 || w > 400 || a > 120) { error = "请输入合理的数值范围"; return }
+        val h = hCm / 100.0
         val bmi = w / (h * h)
         result = String.format(Locale.getDefault(), "BMI = %.1f", bmi)
-        advice = when {
-            bmi < 18.5 -> "偏瘦（<18.5）"
-            bmi < 24 -> "正常（18.5 ~ 23.9）"
-            bmi < 28 -> "超重（24 ~ 27.9）"
-            else -> "肥胖（≥28）"
+
+        val category = when {
+            bmi < 18.5 -> "偏瘦"
+            bmi < 24 -> "正常"
+            bmi < 28 -> "超重"
+            else -> "肥胖"
+        }
+        val bmr = if (gender == "男") 10 * w + 6.25 * hCm - 5 * a + 5 else 10 * w + 6.25 * hCm - 5 * a - 161
+        val bodyFat = 1.2 * bmi + 0.23 * a - 10.8 * (if (gender == "男") 1 else 0) - 5.4
+        val standardMin = 18.5 * h * h
+        val standardMax = 23.9 * h * h
+        details = listOf(
+            "性别" to gender,
+            "年龄" to "${a.toInt()} 岁",
+            "BMI 区间" to "$category（中国标准）",
+            "标准体重范围" to "${money2(standardMin)} ~ ${money2(standardMax)} kg",
+            "基础代谢率 BMR（估算）" to "${money2(bmr)} kcal/天",
+            "体脂率（估算）" to "${money2(bodyFat)}%",
+            "每日建议摄入（轻度活动）" to "${money2(bmr * 1.375)} kcal/天"
+        )
+
+        analysis = buildString {
+            append("【${gender}性 · ${a.toInt()}岁 · $category】\n")
+            when (category) {
+                "偏瘦" -> append("体重偏低，建议适当增加优质蛋白和主食摄入，配合力量训练增加肌肉量；如长期偏瘦建议排查甲状腺、消化吸收等问题。")
+                "正常" -> append("体重处于健康范围，继续保持均衡饮食与规律运动即可。建议每周 150 分钟中等强度运动。")
+                "超重" -> append("体重超出健康范围，建议控制精制碳水和油脂摄入，每周进行 3~5 次有氧运动，并保证充足睡眠。")
+                else -> append("已达到肥胖范围，建议在医生或营养师指导下制定减重计划，避免极端节食，循序渐进、每周减重 0.5~1kg 为宜。")
+            }
+            append("\n")
+            if (gender == "男" && bodyFat > 25) append("男性体脂率偏高（健康参考约 10%~20%），建议增加力量训练。\n")
+            if (gender == "女" && bodyFat > 32) append("女性体脂率偏高（健康参考约 18%~28%），建议增加有氧与力量结合训练。\n")
+            append("说明：以上均为公式估算，仅供参考，不能替代医生或专业机构的诊断。")
         }
     }
 
@@ -70,18 +111,29 @@ fun BmiTool() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SectionCard(title = "身体质量指数 BMI（中国标准）") {
+            ChoiceChips(listOf("男", "女"), gender, { gender = it }, { it })
+            Spacer(Modifier.height(8.dp))
+            LabeledField(age, { age = it }, "年龄（岁）", keyboardType = KeyboardType.Number)
+            Spacer(Modifier.height(8.dp))
             LabeledField(height, { height = it }, "身高（cm）", keyboardType = KeyboardType.Decimal)
             Spacer(Modifier.height(8.dp))
             LabeledField(weight, { weight = it }, "体重（kg）", keyboardType = KeyboardType.Decimal)
             Spacer(Modifier.height(12.dp))
-            Button(onClick = { calc() }, modifier = Modifier.fillMaxWidth()) { Text("计算 BMI") }
+            Button(onClick = { calc() }, modifier = Modifier.fillMaxWidth()) { Text("计算并分析") }
         }
         ErrorText(error)
         if (result.isNotBlank()) {
             SectionCard(title = "结果") {
                 Text(result, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(advice, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(8.dp))
+                details.forEach { (label, value) -> InfoRow("$label：", value) }
             }
+            SectionCard(title = "身体分析") {
+                Text(analysis, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        SectionCard(title = "BMI 参考标准（中国成人）") {
+            Text("偏瘦：< 18.5\n正常：18.5 ~ 23.9\n超重：24 ~ 27.9\n肥胖：≥ 28", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

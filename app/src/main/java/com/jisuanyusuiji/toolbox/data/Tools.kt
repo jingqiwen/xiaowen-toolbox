@@ -1,6 +1,7 @@
 package com.jisuanyusuiji.toolbox.data
 
 import androidx.compose.runtime.Composable
+import com.jisuanyusuiji.toolbox.R
 import com.jisuanyusuiji.toolbox.tools.calc.AnnuityTool
 import com.jisuanyusuiji.toolbox.tools.calc.AsciiTool
 import com.jisuanyusuiji.toolbox.tools.calc.Base64Tool
@@ -13,6 +14,7 @@ import com.jisuanyusuiji.toolbox.tools.calc.DepositInterestTool
 import com.jisuanyusuiji.toolbox.tools.calc.EquationTool
 import com.jisuanyusuiji.toolbox.tools.calc.FractionTool
 import com.jisuanyusuiji.toolbox.tools.calc.GeometryTool
+import com.jisuanyusuiji.toolbox.tools.calc.GeometryProTool
 import com.jisuanyusuiji.toolbox.tools.calc.HashTool
 import com.jisuanyusuiji.toolbox.tools.calc.IpSubnetTool
 import com.jisuanyusuiji.toolbox.tools.calc.LedResistorTool
@@ -26,6 +28,8 @@ import com.jisuanyusuiji.toolbox.tools.calc.UnitConverterTool
 import com.jisuanyusuiji.toolbox.tools.calc.UrlCodecTool
 import com.jisuanyusuiji.toolbox.tools.extra.AaSplitTool
 import com.jisuanyusuiji.toolbox.tools.extra.BmiTool
+import com.jisuanyusuiji.toolbox.tools.extra.CompassTool
+import com.jisuanyusuiji.toolbox.tools.extra.FlashlightTool
 import com.jisuanyusuiji.toolbox.tools.extra.FuelConsumptionTool
 import com.jisuanyusuiji.toolbox.tools.extra.GanzhiTool
 import com.jisuanyusuiji.toolbox.tools.extra.IdPhotoTool
@@ -36,13 +40,18 @@ import com.jisuanyusuiji.toolbox.tools.extra.ImageResizeTool
 import com.jisuanyusuiji.toolbox.tools.extra.ImageStitchTool
 import com.jisuanyusuiji.toolbox.tools.extra.LongImageToPdfTool
 import com.jisuanyusuiji.toolbox.tools.extra.LunarCalendarTool
+import com.jisuanyusuiji.toolbox.tools.extra.MirrorTool
+import com.jisuanyusuiji.toolbox.tools.extra.NotesTool
 import com.jisuanyusuiji.toolbox.tools.extra.PdfToLongImageTool
 import com.jisuanyusuiji.toolbox.tools.extra.QrCodeTool
+import com.jisuanyusuiji.toolbox.tools.extra.RecorderTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoEditTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToAudioTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToGifTool
 import com.jisuanyusuiji.toolbox.tools.extra.WordToPdfTool
+import com.jisuanyusuiji.toolbox.tools.vocab.VocabTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.CarLogoTool
+import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.ShortcutTool
 import com.jisuanyusuiji.toolbox.tools.random.CoinFlipTool
 import com.jisuanyusuiji.toolbox.tools.random.DiceTool
@@ -53,6 +62,7 @@ import com.jisuanyusuiji.toolbox.tools.random.LuckyWheelTool
 import com.jisuanyusuiji.toolbox.tools.random.MultiSelectTool
 import com.jisuanyusuiji.toolbox.tools.random.RandomNumberTool
 import com.jisuanyusuiji.toolbox.tools.random.RandomPickerTool
+import com.jisuanyusuiji.toolbox.tools.random.SlotMachineTool
 import com.jisuanyusuiji.toolbox.tools.text.CaseConvertTool
 import com.jisuanyusuiji.toolbox.tools.text.FindReplaceTool
 import com.jisuanyusuiji.toolbox.tools.text.PasswordTool
@@ -65,9 +75,9 @@ import com.jisuanyusuiji.toolbox.tools.text.ZhConvertTool
 
 enum class ToolCategory(val title: String) {
     RANDOM("🎲 随机工具"),
+    MEDIA("🎬 影音与图像"),
     CALC("🧮 计算与转换"),
     TEXT("📝 文本与编码"),
-    MEDIA("🎬 影音与图像"),
     KNOWLEDGE("📚 图鉴查询"),
     EXTRA("📦 实用工具")
 }
@@ -78,6 +88,7 @@ class ToolDef(
     val desc: String,
     val icon: String,
     val category: ToolCategory,
+    val iconRes: Int? = null,
     val screen: @Composable () -> Unit
 )
 
@@ -94,11 +105,12 @@ object ToolRegistry {
         ToolDef("shuffle", "列表打乱器", "多行文本一键打乱、随机分组排序", "🔀", ToolCategory.RANDOM) { ListShuffleTool() },
         ToolDef("multi_select", "多项随机选择", "输入多个选项，一次选出 N 个结果", "☑️", ToolCategory.RANDOM) { MultiSelectTool() },
         ToolDef("gacha", "抽卡模拟器", "自定义卡池概率、本地配置、抽卡统计", "🃏", ToolCategory.RANDOM) { GachaTool() },
+        ToolDef("slot_machine", "老虎机", "三个相同才停，符号样本空间可编辑", "🎰", ToolCategory.RANDOM) { SlotMachineTool() },
 
         // ---------- 计算与转换 ----------
         ToolDef("basic_calc", "基础计算器", "四则运算、括号、百分号、计算历史", "🧮", ToolCategory.CALC) { BasicCalculatorTool() },
         ToolDef("scientific_calc", "科学计算器", "三角函数、对数、指数、根号、阶乘、复数", "📐", ToolCategory.CALC) { ScientificCalculatorTool() },
-        ToolDef("casio_calc", "卡西欧风格计算器", "仿 CASIO 键盘布局与显示屏风格", "🖩", ToolCategory.CALC) { CasioCalculatorTool() },
+        ToolDef("casio_calc", "卡西欧风格计算器", "仿 CASIO 键盘布局与显示屏风格", "🖩", ToolCategory.CALC, R.drawable.ic_tool_casio) { CasioCalculatorTool() },
         ToolDef("unit_converter", "通用单位换算器", "长度、重量、面积、体积、速度、压力、功率、能量、温度", "📏", ToolCategory.CALC) { UnitConverterTool() },
         ToolDef("base_converter", "进制转换工具", "二/八/十/十六进制互转，支持小数", "2️⃣", ToolCategory.CALC) { BaseConverterTool() },
         ToolDef("date_calc", "日期时间计算器", "日期间隔、N 天前后、工作日、倒计时", "📅", ToolCategory.CALC) { DateTimeCalculatorTool() },
@@ -108,7 +120,7 @@ object ToolRegistry {
         ToolDef("matrix", "矩阵计算器", "二/三阶矩阵加减乘、行列式、求逆", "🔲", ToolCategory.CALC) { MatrixTool() },
         ToolDef("equation", "方程求解器", "一元一次、一元二次方程", "➗", ToolCategory.CALC) { EquationTool() },
         ToolDef("fraction", "分数计算器", "分数四则运算、约分、假分数/带分数", "½", ToolCategory.CALC) { FractionTool() },
-        ToolDef("geometry", "几何计算器", "圆、三角形、矩形、梯形周长面积", "🔺", ToolCategory.CALC) { GeometryTool() },
+        ToolDef("geometry", "几何计算器", "18 种平面/立体图形，面积体积内切圆外接圆", "🔺", ToolCategory.CALC) { GeometryProTool() },
         ToolDef("ratio", "比例计算器", "A:B=C:D 求解未知项", "⚖️", ToolCategory.CALC) { RatioTool() },
         ToolDef("resistor_color", "电阻色环计算器", "色环读阻值、阻值反查色环", "🌈", ToolCategory.CALC) { ResistorColorTool() },
         ToolDef("led_resistor", "LED 限流电阻", "计算限流电阻与功率", "💡", ToolCategory.CALC) { LedResistorTool() },
@@ -147,6 +159,8 @@ object ToolRegistry {
         // ---------- 图鉴查询 ----------
         ToolDef("car_badges", "车标图鉴", "只认识车标图标与名称", "🚗", ToolCategory.KNOWLEDGE) { CarLogoTool() },
         ToolDef("shortcut_keys", "电脑快捷键查询", "Windows / macOS 常用与进阶快捷键", "⌨️", ToolCategory.KNOWLEDGE) { ShortcutTool() },
+        ToolDef("formula_query", "数学物理公式查询", "约 150 条数学/物理公式，可搜索分类", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
+        ToolDef("vocab", "考研背单词", "词库搜索、卡片背诵、自定义词库导入", "📚", ToolCategory.KNOWLEDGE) { VocabTool() },
 
         // ---------- 实用工具 ----------
         ToolDef("qr_code", "二维码生成器", "本地批量生成二维码、保存与分享", "📱", ToolCategory.EXTRA) { QrCodeTool() },
@@ -155,7 +169,12 @@ object ToolRegistry {
         ToolDef("aa_split", "AA 分摊计算器", "多人消费自动分摊到分", "👥", ToolCategory.EXTRA) { AaSplitTool() },
         ToolDef("lunar", "农历公历互查", "内置 ICU 万年历，离线查询", "🗓️", ToolCategory.EXTRA) { LunarCalendarTool() },
         ToolDef("ganzhi", "生肖天干地支", "生肖、年干支、日干支查询", "🐉", ToolCategory.EXTRA) { GanzhiTool() },
-        ToolDef("color_picker", "颜色拾取器", "RGB 滑块与 HEX 互转", "🎨", ToolCategory.EXTRA) { ColorPickerTool() }
+        ToolDef("color_picker", "颜色拾取器", "RGB 滑块与 HEX 互转", "🎨", ToolCategory.EXTRA) { ColorPickerTool() },
+        ToolDef("notes", "备忘录", "本地新建、编辑、搜索、删除备忘", "📝", ToolCategory.EXTRA) { NotesTool() },
+        ToolDef("flashlight", "手电筒", "一键开关闪光灯，退出自动关闭", "🔦", ToolCategory.EXTRA) { FlashlightTool() },
+        ToolDef("compass", "指南针", "传感器实时方向与角度", "🧭", ToolCategory.EXTRA) { CompassTool() },
+        ToolDef("mirror", "镜子", "前置摄像头全屏镜像预览", "🪞", ToolCategory.EXTRA) { MirrorTool() },
+        ToolDef("recorder", "录音机", "本地录音、播放、分享、删除", "🎙️", ToolCategory.EXTRA) { RecorderTool() }
     )
 
     fun byId(id: String): ToolDef? = all.firstOrNull { it.id == id }
