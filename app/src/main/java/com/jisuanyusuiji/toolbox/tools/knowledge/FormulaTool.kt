@@ -1,7 +1,10 @@
 package com.jisuanyusuiji.toolbox.tools.knowledge
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,12 +23,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.CopyButton
+import com.jisuanyusuiji.toolbox.ui.components.MathText
 
 /** 按“科目”归类的顺序（不用小学/初中/高中做分类）。 */
 private val SUBJECT_ORDER = listOf(
@@ -75,7 +83,8 @@ fun FormulaTool() {
     var chapter by remember { mutableStateOf("全部") }
 
     val allFormulas = remember {
-        (FormulaData.all + FormulaDataExtra.all + FormulaDataBooks.all + FormulaDataMore.all + FormulaDataMore2.all)
+        (FormulaData.all + FormulaDataExtra.all + FormulaDataBooks.all +
+            FormulaDataMore.all + FormulaDataMore2.all + FormulaDataMore3.all)
             .map { it.toSubject() }
     }
     val categories = remember {
@@ -142,35 +151,53 @@ fun FormulaTool() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             itemsIndexed(items, key = { index, item -> "$index|${item.category}|${item.name}" }) { _, formula ->
-                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text(
-                            formula.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            buildString {
-                                append(formula.category)
-                                if (formula.chapter.isNotBlank()) append(" · ${formula.chapter}")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            formula.expression,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            formula.note,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(verticalAlignment = Alignment.Top) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    formula.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    buildString {
+                                        append(formula.category)
+                                        if (formula.chapter.isNotBlank()) append(" · ${formula.chapter}")
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        // 公式主体：LaTeX 风格排版 + 淡色底
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        ) {
+                            MathText(
+                                text = formula.expression,
+                                fontSize = 19.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (formula.note.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                formula.note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         CopyButton(text = "${formula.name}\n${formula.expression}\n${formula.note}")
                     }

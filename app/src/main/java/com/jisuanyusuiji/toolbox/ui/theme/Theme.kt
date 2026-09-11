@@ -1,11 +1,14 @@
 package com.jisuanyusuiji.toolbox.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.Prefs
 
 private val LightColors = lightColorScheme(
@@ -46,6 +49,15 @@ private val DarkColors = darkColorScheme(
     outline = Color(0xFF91909A)
 )
 
+/** 统一使用更圆润的卡片/按钮形状，界面更现代。 */
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
+
 @Composable
 fun ToolboxTheme(
     themeMode: String = Prefs.THEME_SYSTEM,
@@ -58,6 +70,7 @@ fun ToolboxTheme(
     }
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
+        shapes = AppShapes,
         content = content
     )
 }

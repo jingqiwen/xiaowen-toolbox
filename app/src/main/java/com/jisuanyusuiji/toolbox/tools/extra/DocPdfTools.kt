@@ -16,6 +16,7 @@ import android.text.TextPaint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -249,6 +251,30 @@ fun WordToPdfTool() {
         }
     }
 
+    /** 把 .docx 交给 WPS / Microsoft Word 打开，用户可在其中“输出为 PDF”，版式与 Word 完全一致。 */
+    fun openInOffice() {
+        val u = uri ?: run { error = "请先选择 .docx 文件"; return }
+        error = ""
+        try {
+            val name = u.lastPathSegment?.substringAfterLast('/')?.takeIf { it.endsWith(".docx") } ?: "document.docx"
+            val tmp = File(context.cacheDir, "open_${System.currentTimeMillis()}_$name")
+            context.contentResolver.openInputStream(u)?.use { input ->
+                tmp.outputStream().use { out -> input.copyTo(out) }
+            }
+            val fu = androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", tmp
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(fu, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            error = "没有找到可打开 .docx 的应用，请先安装 WPS Office 或 Microsoft Word"
+        }
+    }
+
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -273,6 +299,10 @@ fun WordToPdfTool() {
             Button(onClick = { run() }, enabled = uri != null && !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (busy) "转换中…" else "转换为 PDF")
             }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { openInOffice() }, enabled = uri != null, modifier = Modifier.fillMaxWidth()) {
+                Text("📄 用 WPS / Office 打开（原版式，自行导出 PDF）")
+            }
         }
         ErrorText(error)
         if (message.isNotBlank()) {
@@ -282,8 +312,9 @@ fun WordToPdfTool() {
             }
         }
         Text(
-            "说明：本地解析 .docx 的段落与表格文字并按 A4 重新排版；复杂公式、图片、分栏等版式不会原样保留。" +
-                "打开“整页图片输出”后，最终 PDF 的每一页都是一整张图。仅支持 .docx，不支持旧版 .doc。",
+            "想要和 Word 一模一样的 PDF（字体、图片、公式、分栏完全一致）？Android 本地没有 Word 版式渲染引擎，" +
+                "请点“用 WPS / Office 打开”，在 WPS/Word 里选择『输出为 PDF / 另存为 PDF』。\n" +
+                "本工具自带的离线转换提供两种方案：① 文字重排版（可编辑文字，复杂版式会简化）；② 整页图片输出（每一页是一张整图）。仅支持 .docx，不支持旧版 .doc。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -316,23 +347,34 @@ fun LongImageToPdfTool() {
             }
             val doc = PdfDocument()
             val pageW = 595
-            val scale = pageW.toFloat() / bmp.width
+            // 透明背景（PNG 截图常见）先合成到白底，避免在 PDF/暗色阅读器里显示成黑色
+            val safeBmp = if (bmp.hasAlpha()) {
+                Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888).also { out ->
+                    val c = Canvas(out)
+                    c.drawColor(Color.WHITE)
+                    c.drawBitmap(bmp, 0f, 0f, null)
+                }
+            } else bmp
+            val scale = pageW.toFloat() / safeBmp.width
             // 单页最高 14000pt，超过则自动切成多页，避免超大页面导致的崩溃
             val maxSrcSliceH = (14000f / scale).toInt().coerceAtLeast(1)
             var srcY = 0
             var pageIndex = 1
-            while (srcY < bmp.height) {
-                val sliceH = minOf(maxSrcSliceH, bmp.height - srcY)
+            while (srcY < safeBmp.height) {
+                val sliceH = minOf(maxSrcSliceH, safeBmp.height - srcY)
                 val pageH = (sliceH * scale).toInt().coerceIn(1, 14000)
                 val page = doc.startPage(PdfDocument.PageInfo.Builder(pageW, pageH, pageIndex).create())
                 val canvas = page.canvas
-                val src = android.graphics.Rect(0, srcY, bmp.width, srcY + sliceH)
+                // 先铺白底：页面默认是透明的，暗色阅读器会把透明当成黑色
+                canvas.drawColor(Color.WHITE)
+                val src = android.graphics.Rect(0, srcY, safeBmp.width, srcY + sliceH)
                 val dst = RectF(0f, 0f, pageW.toFloat(), pageH.toFloat())
-                canvas.drawBitmap(bmp, src, dst, Paint().apply { isAntiAlias = true; isFilterBitmap = true })
+                canvas.drawBitmap(safeBmp, src, dst, Paint().apply { isAntiAlias = true; isFilterBitmap = true })
                 doc.finishPage(page)
                 srcY += sliceH
                 pageIndex++
             }
+            if (safeBmp !== bmp) safeBmp.recycle()
             val out = ByteArrayOutputStream()
             doc.writeTo(out)
             doc.close()
@@ -355,7 +397,15 @@ fun LongImageToPdfTool() {
             }
             bitmap?.let {
                 Spacer(Modifier.height(8.dp))
-                Image(it.asImageBitmap(), "长图", Modifier.fillMaxWidth().height(220.dp))
+                // 白底预览容器：深色主题下也不会把白色长图衬成黑色
+                androidx.compose.foundation.layout.Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(androidx.compose.ui.graphics.Color.White)
+                        .padding(4.dp)
+                ) {
+                    Image(it.asImageBitmap(), "长图", Modifier.fillMaxWidth().height(220.dp))
+                }
             }
             Spacer(Modifier.height(12.dp))
             Button(onClick = { run() }, enabled = bitmap != null && !busy, modifier = Modifier.fillMaxWidth()) {

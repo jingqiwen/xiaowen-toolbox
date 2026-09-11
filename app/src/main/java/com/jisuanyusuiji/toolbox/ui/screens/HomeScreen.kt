@@ -147,7 +147,7 @@ fun HomeScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "所有数据仅保存在本机 · 联网功能可选（在线词典/检查更新）",
+                    "共 ${ToolRegistry.all.size} 个工具 · 数据仅保存在本机 · 联网功能可选（在线词典/检查更新）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline
                 )
