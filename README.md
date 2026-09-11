@@ -9,6 +9,13 @@
 > GitHub 仓库名：`xiaowen-toolbox`（GitHub 不支持中文仓库名，中文名“小温工具箱”）
 > 仓库地址：https://github.com/jingqiwen/xiaowen-toolbox
 
+## 下载
+
+- **扫码下载**：仓库根目录 `小温工具箱_v0.13.0_下载二维码.png`（二维码指向下面的 Release 安装包）
+- **GitHub Release**：https://github.com/jingqiwen/xiaowen-toolbox/releases/tag/v0.13.0
+- **安装包附件**：`xiaowen-toolbox-v0.13.0-release.apk`（12.7 MB，release 签名；本地也保留了一份 `小温工具箱_v0.13.0_release.apk`）
+- 安装后打开 App → 设置 → 检查更新，也能发现新版本。
+
 ## 项目用途
 
 本项目的主要用途是：

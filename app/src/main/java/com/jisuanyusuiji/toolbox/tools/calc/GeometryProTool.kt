@@ -88,8 +88,8 @@ private val GEO_FORMULAS = listOf(
         "S：表面积；V：体积；a：棱长；R：外接球半径；r：内切球半径"
     ),
     GeoFormula(
-        "棱柱 / 棱锥", "棱柱 V = S底h；棱锥 V = 1/3S底h",
-        "V：体积；S底：底面积；h：高"
+        "棱柱 / 棱锥", "棱柱 V = S_底·h；棱锥 V = 1/3·S_底·h",
+        "V：体积；S_底：底面积；h：高"
     ),
     GeoFormula(
         "正多边形", "周长 C = na，面积 S = 1/2nar（r 为边心距，r = a/(2tan(π/n))）",

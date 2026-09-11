@@ -158,14 +158,14 @@ internal fun matchFraction(s: String, slash: Int, limit: Int): FractionMatch? {
     if (numStart < 0 || numStart >= slash) return null
     if (numStart > limit && s[numStart - 1] == '/') return null // a/b/c 链式除法
     val num = s.substring(numStart, slash).trim()
-    if (num.isEmpty() || num.any { isCjk(it) }) return null
+    if (num.isEmpty() || hasPlainCjk(num)) return null
     if (num.length > 30) return null
 
     val denScan = scanDenominator(s, slash + 1) ?: return null
     var denEnd = denScan.end
     if (denEnd <= slash + 1) return null
     var den = s.substring(slash + 1, denEnd).trim()
-    if (den.isEmpty() || den.any { isCjk(it) }) return null
+    if (den.isEmpty() || hasPlainCjk(den)) return null
     if (den.length > 30) return null
 
     // 分母以纯数字开头、后面又紧跟因子的情况：1/2ab、1/2at^2、2/5mR^2 …
@@ -522,6 +522,23 @@ internal fun isCjk(c: Char): Boolean {
     val code = c.code
     return code in 0x4E00..0x9FFF || code in 0x3400..0x4DBF ||
         code in 0x3000..0x303F || code in 0xFF00..0xFFEF
+}
+
+/**
+ * 是否含有“普通中文”（不是紧跟在 ^ / _ 后面的下标/上标文字）。
+ * 例如 S_底、S_(表) 里的中文是公式的一部分，允许多次出现；
+ * 而“速度/时间”这种中文文本里的斜杠不应被当成分数线。
+ */
+internal fun hasPlainCjk(s: String): Boolean {
+    var i = 0
+    while (i < s.length) {
+        if (isCjk(s[i])) {
+            val prev = if (i > 0) s[i - 1] else ' '
+            if (prev != '_' && prev != '^') return true
+        }
+        i++
+    }
+    return false
 }
 
 /** ASCII → 数学符号，并自动整理运算符间距。 */
