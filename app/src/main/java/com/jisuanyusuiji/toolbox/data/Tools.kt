@@ -172,12 +172,12 @@ object ToolRegistry {
         // ---------- 函数绘图 ----------
         ToolDef("graph_2d", "函数绘图器（2D）", "显函数/极坐标/参数方程/隐函数/不等式，滑块与导出", "📈", ToolCategory.GRAPH) { FunctionGraphTool() },
         ToolDef("graph_3d", "三维函数绘图器", "z=f(x,y) 曲面，旋转查看与导出", "🧊", ToolCategory.GRAPH) { Surface3DTool() },
-        ToolDef("research_plot", "科研绘图", "折线/柱状+误差+散点/箱线/小提琴/热力图/PCA 等 12 种", "📊", ToolCategory.GRAPH) { ResearchPlotTool() },
+        ToolDef("research_plot", "科研绘图（在线工具）", "精选免费在线绘图/统计/热图/PCA 网站，一键跳转并导出", "📊", ToolCategory.GRAPH) { ResearchPlotTool() },
 
         // ---------- 知识查询 ----------
         ToolDef("shortcut_keys", "电脑快捷键查询", "Windows / macOS 常用与进阶快捷键", "⌨️", ToolCategory.KNOWLEDGE) { ShortcutTool() },
         ToolDef("constants", "科学常量表", "数学、物理、电磁、量子、天文常用常数，可搜索分类", "🔬", ToolCategory.KNOWLEDGE) { ConstantsTool() },
-        ToolDef("formula_query", "数学物理公式查询", "小学到大学教材公式，含高数/线代/概率/复变/大物，可按教材章节筛选", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
+        ToolDef("formula_query", "数学物理公式查询", "按科目分类的数学/物理公式大全（约 1200 条），支持搜索与章节筛选", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
         ToolDef("probability", "概率论公式与分布", "概率公式大全 + 正态/二项/泊松等分布计算", "🎲", ToolCategory.KNOWLEDGE) { ProbabilityTool() },
         ToolDef("vocab", "考研背单词", "词库搜索、卡片背诵、自定义词库导入", "📚", ToolCategory.KNOWLEDGE) { VocabTool() },
 
