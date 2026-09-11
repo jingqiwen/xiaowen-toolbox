@@ -29,11 +29,15 @@ import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 fun FormulaTool() {
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("全部") }
+    var level by remember { mutableStateOf("全部") }
 
-    val categories = remember { listOf("全部") + FormulaData.all.map { it.category }.distinct() }
-    val items = remember(query, category) {
-        FormulaData.all.filter { item ->
+    val allFormulas = remember { FormulaData.all + FormulaDataExtra.all }
+    val categories = remember { listOf("全部") + allFormulas.map { it.category }.distinct() }
+    val levels = listOf("全部", "小学", "初中", "高中", "大学", "考研", "研究生", "通用")
+    val items = remember(query, category, level) {
+        allFormulas.filter { item ->
             (category == "全部" || item.category == category) &&
+                (level == "全部" || item.level == level) &&
                 (query.isBlank() ||
                     item.name.contains(query, true) ||
                     item.expression.contains(query, true) ||
@@ -43,7 +47,7 @@ fun FormulaTool() {
 
     Column(Modifier.fillMaxSize()) {
         Text(
-            "🧮 数学 / 物理公式 · ${items.size} / ${FormulaData.all.size} 条",
+            "🧮 数学 / 物理公式 · ${items.size} / ${allFormulas.size} 条",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -57,6 +61,14 @@ fun FormulaTool() {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
         Spacer(Modifier.height(8.dp))
+        ChoiceChips(
+            options = levels,
+            selected = level,
+            onSelect = { level = it },
+            label = { it },
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(6.dp))
         ChoiceChips(
             options = categories,
             selected = category,

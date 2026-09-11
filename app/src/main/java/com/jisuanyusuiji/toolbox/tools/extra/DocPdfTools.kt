@@ -129,6 +129,7 @@ fun WordToPdfTool() {
     val context = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri = it }
 
@@ -141,8 +142,9 @@ fun WordToPdfTool() {
             if (paragraphs.isEmpty()) { error = "未能从文档中读取到文本"; return }
             val bytes = buildPdfFromParagraphs(paragraphs)
             val name = (u.lastPathSegment?.substringBeforeLast(".") ?: "document") + ".pdf"
-            message = saveBytesToGallery(context, bytes, "application/pdf", name) +
-                "\n已转换 ${paragraphs.size} 个段落"
+            val savedMedia = saveMedia(context, bytes, "application/pdf", name)
+            saved = savedMedia
+            message = "已转换 ${paragraphs.size} 个段落"
         } catch (e: Exception) {
             error = "转换失败：${e.message ?: "文件格式不支持"}"
         }
@@ -160,7 +162,12 @@ fun WordToPdfTool() {
             Button(onClick = { run() }, enabled = uri != null, modifier = Modifier.fillMaxWidth()) { Text("转换为 PDF") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
         Text(
             "说明：当前版本为本地文本转换（段落文字），图片、表格与复杂排版暂不保留；仅支持 .docx，不支持旧版 .doc。",
             style = MaterialTheme.typography.bodySmall,
@@ -177,6 +184,7 @@ fun LongImageToPdfTool() {
     val context = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri = it }
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it, 8000) } }
@@ -199,7 +207,8 @@ fun LongImageToPdfTool() {
         val out = ByteArrayOutputStream()
         doc.writeTo(out)
         doc.close()
-        message = saveBytesToGallery(context, out.toByteArray(), "application/pdf", "LONGIMG_${System.currentTimeMillis()}.pdf")
+        saved = saveMedia(context, out.toByteArray(), "application/pdf", "LONGIMG_${System.currentTimeMillis()}.pdf")
+        message = "已生成长图 PDF"
     }
 
     Column(
@@ -218,7 +227,12 @@ fun LongImageToPdfTool() {
             Button(onClick = { run() }, enabled = bitmap != null, modifier = Modifier.fillMaxWidth()) { Text("生成为 PDF") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
     }
 }
 
@@ -232,6 +246,7 @@ fun PdfToLongImageTool() {
     var message by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri = it }
 
     fun run() {
@@ -267,7 +282,8 @@ fun PdfToLongImageTool() {
                     y += bmp.height
                 }
                 preview = out
-                message = saveBitmapToGallery(context, out, "image/jpeg", Bitmap.CompressFormat.JPEG, 92, "PDFLONG_${System.currentTimeMillis()}.jpg")
+                saved = saveBitmapMedia(context, out, "image/jpeg", Bitmap.CompressFormat.JPEG, 92, "PDFLONG_${System.currentTimeMillis()}.jpg")
+                message = "已转换 ${pages.size} 页"
             }
         } catch (e: Exception) {
             error = "转换失败：${e.message ?: "文件格式不支持"}"
@@ -286,7 +302,12 @@ fun PdfToLongImageTool() {
             Button(onClick = { run() }, enabled = uri != null, modifier = Modifier.fillMaxWidth()) { Text("转换为长图") }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
         preview?.let {
             SectionCard(title = "预览") {
                 Image(it.asImageBitmap(), "PDF 长图", Modifier.fillMaxWidth().height(260.dp))

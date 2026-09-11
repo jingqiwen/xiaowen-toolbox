@@ -8,6 +8,7 @@ import com.jisuanyusuiji.toolbox.tools.calc.Base64Tool
 import com.jisuanyusuiji.toolbox.tools.calc.BaseConverterTool
 import com.jisuanyusuiji.toolbox.tools.calc.BasicCalculatorTool
 import com.jisuanyusuiji.toolbox.tools.calc.CasioCalculatorTool
+import com.jisuanyusuiji.toolbox.tools.calc.CasioProTool
 import com.jisuanyusuiji.toolbox.tools.calc.ColorPickerTool
 import com.jisuanyusuiji.toolbox.tools.calc.DateTimeCalculatorTool
 import com.jisuanyusuiji.toolbox.tools.calc.DepositInterestTool
@@ -43,6 +44,8 @@ import com.jisuanyusuiji.toolbox.tools.extra.LunarCalendarTool
 import com.jisuanyusuiji.toolbox.tools.extra.MirrorTool
 import com.jisuanyusuiji.toolbox.tools.extra.NotesTool
 import com.jisuanyusuiji.toolbox.tools.extra.PdfToLongImageTool
+import com.jisuanyusuiji.toolbox.tools.extra.PptToImagesTool
+import com.jisuanyusuiji.toolbox.tools.extra.ImagesToPptTool
 import com.jisuanyusuiji.toolbox.tools.extra.QrCodeTool
 import com.jisuanyusuiji.toolbox.tools.extra.RecorderTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoEditTool
@@ -50,6 +53,7 @@ import com.jisuanyusuiji.toolbox.tools.extra.VideoToAudioTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToGifTool
 import com.jisuanyusuiji.toolbox.tools.extra.WordToPdfTool
 import com.jisuanyusuiji.toolbox.tools.graph.FunctionGraphTool
+import com.jisuanyusuiji.toolbox.tools.graph.ResearchPlotTool
 import com.jisuanyusuiji.toolbox.tools.graph.Surface3DTool
 import com.jisuanyusuiji.toolbox.tools.probability.ProbabilityTool
 import com.jisuanyusuiji.toolbox.tools.vocab.VocabTool
@@ -115,6 +119,7 @@ object ToolRegistry {
         ToolDef("basic_calc", "基础计算器", "四则运算、括号、百分号、计算历史", "🧮", ToolCategory.CALC) { BasicCalculatorTool() },
         ToolDef("scientific_calc", "科学计算器", "三角函数、对数、指数、根号、阶乘、复数", "📐", ToolCategory.CALC) { ScientificCalculatorTool() },
         ToolDef("casio_calc", "卡西欧风格计算器", "仿 CASIO 键盘布局与显示屏风格", "🖩", ToolCategory.CALC, R.drawable.ic_tool_casio) { CasioCalculatorTool() },
+        ToolDef("casio_pro", "fx-999 专业模式", "统计回归/函数表格/常量表/单位换算/向量/不等式/变量存储", "🧠", ToolCategory.CALC) { CasioProTool() },
         ToolDef("unit_converter", "通用单位换算器", "长度、重量、面积、体积、速度、压力、功率、能量、温度", "📏", ToolCategory.CALC) { UnitConverterTool() },
         ToolDef("base_converter", "进制转换工具", "二/八/十/十六进制互转，支持小数", "2️⃣", ToolCategory.CALC) { BaseConverterTool() },
         ToolDef("date_calc", "日期时间计算器", "日期间隔、N 天前后、工作日、倒计时", "📅", ToolCategory.CALC) { DateTimeCalculatorTool() },
@@ -156,6 +161,8 @@ object ToolRegistry {
         ToolDef("word_to_pdf", "Word 转 PDF", ".docx 文本段落转 PDF（离线）", "📄", ToolCategory.MEDIA) { WordToPdfTool() },
         ToolDef("long_image_to_pdf", "长图转 PDF", "长截图、长海报生成为 PDF", "📜", ToolCategory.MEDIA) { LongImageToPdfTool() },
         ToolDef("pdf_to_long_image", "PDF 转长图", "PDF 各页渲染后竖向拼接", "🧾", ToolCategory.MEDIA) { PdfToLongImageTool() },
+        ToolDef("ppt_to_images", "PPT 转图片", ".pptx 每页转成一张 PNG", "🖼️", ToolCategory.MEDIA) { PptToImagesTool() },
+        ToolDef("images_to_ppt", "图片转 PPT", "多张图片按顺序生成 .pptx", "📽️", ToolCategory.MEDIA) { ImagesToPptTool() },
         ToolDef("video_to_audio", "视频转音频", "提取视频原声为 M4A", "🎵", ToolCategory.MEDIA) { VideoToAudioTool() },
         ToolDef("video_to_gif", "视频转 GIF", "抽帧生成动图", "🎞️", ToolCategory.MEDIA) { VideoToGifTool() },
         ToolDef("video_edit", "视频格式转换/变速/压缩", "输出 MP4(H.264)，支持变速与重编码", "🎬", ToolCategory.MEDIA) { VideoEditTool() },
@@ -163,6 +170,7 @@ object ToolRegistry {
         // ---------- 函数绘图 ----------
         ToolDef("graph_2d", "函数绘图器（2D）", "显函数/极坐标/参数方程/隐函数/不等式，滑块与导出", "📈", ToolCategory.GRAPH) { FunctionGraphTool() },
         ToolDef("graph_3d", "三维函数绘图器", "z=f(x,y) 曲面，旋转查看与导出", "🧊", ToolCategory.GRAPH) { Surface3DTool() },
+        ToolDef("research_plot", "科研绘图", "折线/柱状+误差+散点/箱线/小提琴/热力图/PCA 等 12 种", "📊", ToolCategory.GRAPH) { ResearchPlotTool() },
 
         // ---------- 图鉴查询 ----------
         ToolDef("car_badges", "车标图鉴", "170+ 车标，自动加载公开版权车标，可自行导入", "🚗", ToolCategory.KNOWLEDGE) { CarLogoTool() },

@@ -12,7 +12,9 @@ data class VocabWord(
     val derivatives: String = "",
     val synonyms: String = "",
     val antonyms: String = "",
-    val similar: String = ""
+    val similar: String = "",
+    val tags: String = "",
+    val collins: String = ""
 )
 
 /** 内置高频词精讲（可自行导入更多词库）。 */

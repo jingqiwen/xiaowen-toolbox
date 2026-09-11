@@ -1,5 +1,6 @@
 package com.jisuanyusuiji.toolbox.tools.vocab
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,7 +33,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.JsonStore
+import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import org.json.JSONArray
+import org.json.JSONObject
 
 private fun loadStringSet(store: JsonStore, key: String): MutableSet<String> {
     val arr = store.getArray(key)
@@ -54,24 +57,42 @@ fun VocabTool() {
     var custom by remember { mutableStateOf(loadCustomWords(store)) }
     var known by remember { mutableStateOf(loadStringSet(store, "known")) }
     var mode by remember { mutableStateOf("词库") }
+    var level by remember { mutableStateOf("考研") }
     var query by remember { mutableStateOf("") }
     var detail by remember { mutableStateOf<VocabWord?>(null) }
     var showImport by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
 
-    val all = remember(custom) { VocabData.builtIn + custom }
-    val filtered = remember(query, all) {
-        if (query.isBlank()) all
-        else all.filter {
+    val bulk = remember { loadBulkWords(context) }
+    val levelList = remember(level, custom, bulk) {
+        when (level) {
+            "内置精讲" -> VocabData.builtIn
+            "我的词库" -> custom
+            "考研" -> bulk.filter { it.tags.contains("ky") }
+            "四级" -> bulk.filter { it.tags.contains("cet4") }
+            "六级" -> bulk.filter { it.tags.contains("cet6") }
+            else -> bulk
+        }
+    }
+    val filtered = remember(query, levelList) {
+        if (query.isBlank()) levelList
+        else levelList.filter {
             it.word.contains(query, true) || it.meanings.contains(query, true) || it.phrases.contains(query, true)
         }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            "📚 考研背单词 · 共 ${all.size} 词（已掌握 ${known.size}）",
+            "📚 背单词 · ${level} · 共 ${levelList.size} 词（已掌握 ${known.size}）",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(8.dp))
+        ChoiceChips(
+            listOf("内置精讲", "考研", "四级", "六级", "我的词库"),
+            level,
+            { level = it },
+            { it }
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -124,7 +145,7 @@ fun VocabTool() {
             }
         } else {
             StudyMode(
-                words = filtered.ifEmpty { all },
+                words = filtered.ifEmpty { levelList },
                 known = known,
                 onKnown = { word, isKnown ->
                     known = if (isKnown) (known + word).toMutableSet() else (known - word).toMutableSet()
@@ -151,6 +172,8 @@ fun VocabTool() {
                     if (word.synonyms.isNotBlank()) InfoLine("近义词", word.synonyms)
                     if (word.antonyms.isNotBlank()) InfoLine("反义词", word.antonyms)
                     if (word.similar.isNotBlank()) InfoLine("形近词", word.similar)
+                    if (word.tags.isNotBlank()) InfoLine("词库标签", word.tags.uppercase())
+                    if (word.collins.isNotBlank() && word.collins != "0") InfoLine("柯林斯星级", word.collins)
                 }
             },
             confirmButton = { TextButton(onClick = { detail = null }) { Text("关闭") } }
@@ -266,6 +289,33 @@ private fun StudyMode(words: List<VocabWord>, known: Set<String>, onKnown: (Stri
 @Composable
 private fun InfoLine(label: String, value: String) {
     Text("$label：$value", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 3.dp))
+}
+
+private fun loadBulkWords(context: Context): List<VocabWord> = try {
+    context.assets.open("vocab_bulk.jsonl").bufferedReader().useLines { lines ->
+        lines.mapNotNull { line ->
+            try {
+                val o = JSONObject(line)
+                val exchange = o.optString("e")
+                fun ex(key: String): String =
+                    Regex("(?:^|/)" + key + ":([^/]+)").find(exchange)?.groupValues?.getOrNull(1) ?: ""
+                VocabWord(
+                    word = o.optString("w"),
+                    phonetic = o.optString("p"),
+                    meanings = o.optString("t"),
+                    usage = o.optString("s"),
+                    pastTense = ex("p"),
+                    pastParticiple = ex("d"),
+                    tags = o.optString("g"),
+                    collins = o.optString("c")
+                ).takeIf { it.word.isNotBlank() && it.meanings.isNotBlank() }
+            } catch (_: Exception) {
+                null
+            }
+        }.toList()
+    }
+} catch (_: Exception) {
+    emptyList()
 }
 
 private fun loadCustomWords(store: JsonStore): MutableList<VocabWord> {

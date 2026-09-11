@@ -4,7 +4,8 @@ data class FormulaItem(
     val category: String,
     val name: String,
     val expression: String,
-    val note: String
+    val note: String,
+    val level: String = "通用"
 )
 
 object FormulaData {

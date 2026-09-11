@@ -213,6 +213,7 @@ fun VideoToAudioTool() {
     val scope = rememberCoroutineScope()
     var uri by remember { mutableStateOf<Uri?>(null) }
     var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
@@ -229,7 +230,8 @@ fun VideoToAudioTool() {
                 error = err
             } else {
                 val bytes = outFile.readBytes()
-                message = saveBytesToGallery(context, bytes, "audio/mp4", "AUDIO_${System.currentTimeMillis()}.m4a")
+                saved = saveMedia(context, bytes, "audio/mp4", "AUDIO_${System.currentTimeMillis()}.m4a")
+                message = "音频已提取"
             }
         }
     }
@@ -246,7 +248,12 @@ fun VideoToAudioTool() {
             }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
         Text("说明：从视频中直接抽取音频轨道，不重新编码；仅当视频带音频时可用。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }
@@ -263,6 +270,7 @@ fun VideoToGifTool() {
     var frames by remember { mutableStateOf(20) }
     var width by remember { mutableStateOf(320) }
     var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
@@ -290,7 +298,8 @@ fun VideoToGifTool() {
                     }
                     retriever.release()
                     val bytes = encoder.finish()
-                    message = saveBytesToGallery(context, bytes, "image/gif", "GIF_${System.currentTimeMillis()}.gif")
+                    saved = saveMedia(context, bytes, "image/gif", "GIF_${System.currentTimeMillis()}.gif")
+                    message = "GIF 已生成"
                 } catch (e: Exception) {
                     error = "转换失败：${e.message}"
                 }
@@ -317,7 +326,12 @@ fun VideoToGifTool() {
             }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
         Text("说明：按时间均匀抽取帧；画面为方形（按宽度等比缩放）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }
@@ -332,6 +346,7 @@ fun VideoEditTool() {
     var speed by remember { mutableStateOf(1.0f) }
     var mode by remember { mutableStateOf("转 MP4 / 压缩") }
     var message by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var transformer by remember { mutableStateOf<Transformer?>(null) }
@@ -349,8 +364,8 @@ fun VideoEditTool() {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     busy = false
                     val bytes = outFile.readBytes()
-                    message = saveBytesToGallery(context, bytes, "video/mp4", "VIDEO_${System.currentTimeMillis()}.mp4") +
-                        "\n输出：${outFile.absolutePath}"
+                    saved = saveMedia(context, bytes, "video/mp4", "VIDEO_${System.currentTimeMillis()}.mp4")
+                    message = "视频处理完成"
                     transformer = null
                 }
 
@@ -396,7 +411,12 @@ fun VideoEditTool() {
             }
         }
         ErrorText(error)
-        if (message.isNotBlank()) SectionCard(title = "结果") { Text(message) }
+        if (message.isNotBlank()) {
+            SectionCard(title = "结果") {
+                Text(message)
+                saved?.let { MediaResultActions(it) }
+            }
+        }
         SectionCard(title = "支持范围说明") {
             Text(
                 "输出：MP4（H.264 + AAC）。\n输入：MP4、MOV、TS、MKV、FLV 等常见格式；AVI、特殊编码的 MKV/FLV 可能不支持。\n" +
