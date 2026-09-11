@@ -1,6 +1,9 @@
 package com.jisuanyusuiji.toolbox.tools.vocab
 
 import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -39,6 +44,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -284,6 +292,23 @@ fun VocabTool() {
     var reviewSession by remember { mutableStateOf<List<VocabWord>>(emptyList()) }
     var scheduleTick by remember { mutableStateOf(0) }
 
+    // 背单词页：向下滑时顶部分类/设置区收起，向上滑或滑回顶部时再展开
+    var headerVisible by remember { mutableStateOf(true) }
+    val studyListState = rememberLazyListState()
+    val headerNestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -1.2f) headerVisible = false
+                if (available.y > 1.2f) headerVisible = true
+                return Offset.Zero
+            }
+        }
+    }
+    // 每次进入“背单词”先把工具栏展开，避免刚从别的页面切回来时是收起状态
+    LaunchedEffect(mode) {
+        if (mode == "背单词") headerVisible = true
+    }
+
     fun markZone(word: String, zone: String?) {
         val next = zones.toMutableMap()
         if (zone == null) next.remove(word) else next[word] = zone
@@ -363,80 +388,76 @@ fun VocabTool() {
     val fuzzyCount = zones.values.count { it == ZONE_FUZZY }
     val unknownCount = zones.values.count { it == ZONE_UNKNOWN }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            "📚 背单词 · ${level} · ${levelList.size} 词",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            "掌握 $knownCount · 不熟悉 $fuzzyCount · 完全不认识 $unknownCount（所有单词点开都是完整精讲）",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        ChoiceChips(
-            listOf("精选精讲", "考研", "四级", "六级", "我的词库"),
-            level,
-            { level = it },
-            {
-                when (it) {
-                    "考研", "四级", "六级" -> "$it ${levelCounts[it] ?: 0}"
-                    else -> it
+    val screenScrollModifier = if (mode == "背单词") Modifier.nestedScroll(headerNestedScroll) else Modifier
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .then(screenScrollModifier)
+    ) {
+        // 背单词时整块“分类 / 级别 / 分区 / 模式”工具栏：下划收起，上划展开
+        AnimatedVisibility(
+            visible = headerVisible || mode != "背单词",
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Column {
+                Text(
+                    "📚 背单词 · ${level} · ${levelList.size} 词",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "掌握 $knownCount · 不熟悉 $fuzzyCount · 完全不认识 $unknownCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ChoiceChips(
+                        listOf("精选精讲", "考研", "四级", "六级", "我的词库"),
+                        level,
+                        { level = it },
+                        {
+                            when (it) {
+                                "考研", "四级", "六级" -> "$it ${levelCounts[it] ?: 0}"
+                                else -> it
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (level == "考研" || level == "四级" || level == "六级") {
+                        TextButton(onClick = { includeBasic = !includeBasic }) {
+                            Text(if (includeBasic) "含基础词 ✓" else "补全基础词", maxLines = 1)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                ChoiceChips(
+                    listOf("全部", ZONE_UNKNOWN, ZONE_FUZZY, ZONE_KNOWN),
+                    zoneFilter,
+                    { zoneFilter = it },
+                    { if (it == "全部") "全部分区" else zoneLabel(it) }
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ChoiceChips(
+                        options = listOf("词库", "背单词", "复习计划"),
+                        selected = mode,
+                        onSelect = { selected ->
+                            if (selected != mode) {
+                                mode = selected
+                                if (selected != "复习计划") reviewOnly = false
+                            }
+                        },
+                        label = { it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { showImport = true }) { Text("导入", maxLines = 1) }
                 }
             }
-        )
-        if (level == "考研" || level == "四级" || level == "六级") {
-            Spacer(Modifier.height(6.dp))
-            ChoiceChips(
-                listOf(false, true),
-                includeBasic,
-                { includeBasic = it },
-                { if (it) "含基础词（补全）" else "官方大纲规模" }
-            )
         }
         Spacer(Modifier.height(6.dp))
-        ChoiceChips(
-            listOf("全部", ZONE_UNKNOWN, ZONE_FUZZY, ZONE_KNOWN),
-            zoneFilter,
-            { zoneFilter = it },
-            { if (it == "全部") "全部分区" else zoneLabel(it) }
-        )
-        if (mode == "背单词") {
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ChoiceChips(
-                    options = listOf(false, true),
-                    selected = shuffle,
-                    onSelect = { shuffle = it; reshuffle++ },
-                    label = { if (it) "🔀 乱序版" else "顺序版" },
-                    modifier = Modifier.weight(1f)
-                )
-                if (shuffle) {
-                    TextButton(onClick = { reshuffle++ }) { Text("重新洗牌") }
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(
-                onClick = { mode = "词库"; reviewOnly = false },
-                modifier = Modifier.weight(1f),
-                enabled = mode != "词库"
-            ) { Text("词库", maxLines = 1) }
-            Button(
-                onClick = { mode = "背单词"; reviewOnly = false },
-                modifier = Modifier.weight(1f),
-                enabled = mode != "背单词" || reviewOnly
-            ) { Text("背单词", maxLines = 1) }
-            Button(
-                onClick = { mode = "复习计划" },
-                modifier = Modifier.weight(1f),
-                enabled = mode != "复习计划"
-            ) { Text("复习计划", maxLines = 1) }
-            OutlinedButton(onClick = { showImport = true }, modifier = Modifier.weight(1f)) { Text("导入", maxLines = 1) }
-        }
-        Spacer(Modifier.height(8.dp))
 
         if (mode == "词库") {
             OutlinedTextField(
@@ -514,9 +535,12 @@ fun VocabTool() {
                 words = studyWords,
                 zones = zones,
                 schedule = schedule,
+                listState = studyListState,
+                shuffle = shuffle,
+                onToggleShuffle = { shuffle = !shuffle; reshuffle++ },
+                onReshuffle = { reshuffle++ },
                 onZone = { word, zone -> markZone(word, zone) },
-                onClearZone = { clearZone(it) },
-                onReshuffle = { if (shuffle) reshuffle++ }
+                onClearZone = { clearZone(it) }
             )
         }
     }
@@ -885,16 +909,19 @@ private fun EbbinghausCurve() {
 
 /**
  * 背单词模式：一次显示一个单词，显示释义后点“完全不认识 / 不熟悉 / 掌握”，
- * 自动进入下一个单词；下方是不认识区 / 不熟悉区 / 掌握区三个分区。
+ * 自动进入下一个单词；单词大卡片固定在屏幕主要位置，下方是不认识区 / 不熟悉区 / 掌握区。
  */
 @Composable
 private fun StudyMode(
     words: List<VocabWord>,
     zones: Map<String, String>,
     schedule: Map<String, ReviewState>,
+    listState: LazyListState,
+    shuffle: Boolean,
+    onToggleShuffle: () -> Unit,
+    onReshuffle: () -> Unit,
     onZone: (String, String?) -> Unit,
-    onClearZone: (String) -> Unit,
-    onReshuffle: () -> Unit
+    onClearZone: (String) -> Unit
 ) {
     var index by remember { mutableStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
@@ -907,41 +934,97 @@ private fun StudyMode(
     val safeIndex = ((index % words.size) + words.size) % words.size
     val word = words[safeIndex]
 
+    // 换词后回到顶部：刚标记完就能看到下一张单词卡
+    LaunchedEffect(safeIndex) {
+        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+            listState.animateScrollToItem(0)
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${safeIndex + 1} / ${words.size}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                zones[word.word]?.let {
-                    Text(
-                        "当前标记：${zoneLabel(it)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                Text(
+                    "${safeIndex + 1} / ${words.size}",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = onToggleShuffle,
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) { Text(if (shuffle) "🔀 乱序版" else "顺序版", maxLines = 1) }
+                if (shuffle) {
+                    TextButton(
+                        onClick = onReshuffle,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) { Text("洗牌", maxLines = 1) }
                 }
-                TextButton(onClick = {
-                    index = (safeIndex + 1) % words.size
-                    revealed = false
-                }) { Text("跳过 ›") }
+                TextButton(
+                    onClick = {
+                        index = (safeIndex + 1) % words.size
+                        revealed = false
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) { Text("跳过 ›", maxLines = 1) }
             }
         }
+        // 主单词卡：固定占屏幕大半高度，内容太长时在卡片内部滚动
         item {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                    Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    schedule[word.word]?.let { st ->
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "🧠 ${stageLabel(st.stage)} · 下次复习：${dueLabel(st.dueAt)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
+            Card(
+                modifier = Modifier
+                    .fillParentMaxWidth()
+                    .fillParentMaxHeight(0.60f)
+            ) {
+                if (!revealed) {
+                    Column(
+                        Modifier.fillMaxSize().padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                        Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        zones[word.word]?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text("当前标记：${zoneLabel(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        schedule[word.word]?.let { st ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "🧠 ${stageLabel(st.stage)} · 下次复习：${dueLabel(st.dueAt)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        Spacer(Modifier.height(18.dp))
+                        Text("点击下方“显示释义”查看答案", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(16.dp))
-                    if (revealed) {
+                } else {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                        Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        zones[word.word]?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text("当前标记：${zoneLabel(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        schedule[word.word]?.let { st ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "🧠 ${stageLabel(st.stage)} · 下次复习：${dueLabel(st.dueAt)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        Spacer(Modifier.height(14.dp))
                         formatMeanings(word.meanings).split('\n').filter { it.isNotBlank() }.forEach { line ->
                             Text(line, style = MaterialTheme.typography.bodyLarge)
                         }
@@ -949,8 +1032,7 @@ private fun StudyMode(
                             Spacer(Modifier.height(6.dp))
                             Text("搭配：${word.phrases}", style = MaterialTheme.typography.bodyMedium)
                         }
-                    } else {
-                        Text("点击下方“显示释义”查看答案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }
@@ -985,7 +1067,7 @@ private fun StudyMode(
         }
         item {
             Text(
-                "📂 单词分区（共 ${zones.size} 词已标记，点击分区中的单词可跳转；乱序模式可点上方“重新洗牌”）",
+                "📂 单词分区（共 ${zones.size} 词已标记，点击分区中的单词可跳转）",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary
             )
