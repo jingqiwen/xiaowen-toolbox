@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaItem
+import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaLegend
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
@@ -122,6 +124,16 @@ fun ProbabilityTool() {
             Spacer(Modifier.height(6.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(items, key = { it.category + it.name }) { f ->
+                    val legend = remember(f) {
+                        FormulaLegend.of(
+                            FormulaItem(
+                                category = "概率论与数理统计",
+                                name = f.name,
+                                expression = f.expression,
+                                note = f.note
+                            )
+                        )
+                    }
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp)) {
                             Text("${f.name} · ${f.category}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -141,8 +153,23 @@ fun ProbabilityTool() {
                             }
                             Spacer(Modifier.height(6.dp))
                             Text(f.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (legend.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "🔤 符号说明：$legend",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
                             Spacer(Modifier.height(6.dp))
-                            CopyButton("${f.name}\n${f.expression}\n${f.note}")
+                            CopyButton(
+                                buildString {
+                                    appendLine(f.name)
+                                    appendLine(f.expression)
+                                    appendLine(f.note)
+                                    if (legend.isNotBlank()) append("符号说明：$legend")
+                                }
+                            )
                         }
                     }
                 }

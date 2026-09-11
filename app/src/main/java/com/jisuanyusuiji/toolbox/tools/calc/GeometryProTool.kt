@@ -18,13 +18,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.InfoRow
 import com.jisuanyusuiji.toolbox.ui.components.LabeledField
+import com.jisuanyusuiji.toolbox.ui.components.MathText
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
 import kotlin.math.PI
 import kotlin.math.acos
@@ -38,6 +41,60 @@ import kotlin.math.tan
 private val SHAPES = listOf(
     "圆", "扇形", "椭圆", "三角形", "直角三角形", "矩形", "平行四边形", "菱形",
     "梯形", "正多边形", "长方体", "正方体", "圆柱", "圆锥", "圆台", "球", "棱柱", "棱锥"
+)
+
+/** 常用几何公式速查：每条公式都配“每个字母什么意思”。 */
+private data class GeoFormula(val name: String, val expr: String, val legend: String)
+
+private val GEO_FORMULAS = listOf(
+    GeoFormula(
+        "圆", "C = 2πr，S = πr^2",
+        "r：半径；π：圆周率（≈3.14159）；C：周长；S：面积"
+    ),
+    GeoFormula(
+        "扇形", "l = rθ，S = 1/2lr = 1/2r^2θ",
+        "l：弧长；r：半径；θ：圆心角（用弧度表示，1 弧度≈57.3°）；S：扇形面积"
+    ),
+    GeoFormula(
+        "椭圆", "S = πab，L ≈ π[3(a+b) - √((3a+b)(a+3b))]",
+        "S：椭圆面积；L：周长（近似公式）；a：半长轴；b：半短轴；π：圆周率"
+    ),
+    GeoFormula(
+        "三角形", "S = 1/2ab·sinC = √[p(p-a)(p-b)(p-c)] = abc/(4R) = rp",
+        "a、b、c：三边长；C：边 a、b 的夹角；S：面积；p=(a+b+c)/2：半周长；R：外接圆半径；r：内切圆半径"
+    ),
+    GeoFormula(
+        "球", "V = 4/3πr^3，S = 4πr^2",
+        "V：球体积；S：球表面积；r：半径；π：圆周率"
+    ),
+    GeoFormula(
+        "圆柱", "V = πr^2h，S侧 = 2πrh，S表 = 2πr^2 + 2πrh，外接球 R = √(r^2 + h^2/4)",
+        "V：体积；S侧：侧面积；S表：表面积；r：底面半径；h：高；R：外接球半径；π：圆周率"
+    ),
+    GeoFormula(
+        "圆锥", "V = 1/3πr^2h，S侧 = πrl，外接球 R = (r^2+h^2)/(2h)，内切球 r内 = rh/(r+l)",
+        "V：体积；S侧：侧面积；r：底面半径；h：高；l：母线长；R：外接球半径；r内：内切球半径"
+    ),
+    GeoFormula(
+        "圆台", "V = 1/3πh(R^2+Rr+r^2)，S侧 = π(R+r)l",
+        "V：体积；S侧：侧面积；R：下底半径；r：上底半径；h：高；l：母线长；π：圆周率"
+    ),
+    GeoFormula(
+        "长方体", "V = abc，S = 2(ab+bc+ca)，体对角线 d = √(a^2+b^2+c^2)，外接球 R = d/2",
+        "V：体积；S：表面积；a、b、c：长、宽、高；d：体对角线；R：外接球半径"
+    ),
+    GeoFormula(
+        "正方体", "S = 6a^2，V = a^3，外接球 R = √3a/2，内切球 r = a/2",
+        "S：表面积；V：体积；a：棱长；R：外接球半径；r：内切球半径"
+    ),
+    GeoFormula(
+        "棱柱 / 棱锥", "棱柱 V = S底h；棱锥 V = 1/3S底h",
+        "V：体积；S底：底面积；h：高"
+    ),
+    GeoFormula(
+        "正多边形", "周长 C = na，面积 S = 1/2nar（r 为边心距，r = a/(2tan(π/n))）",
+        "C：周长；S：面积；n：边数；a：边长；r：边心距（内切圆半径）；π：圆周率"
+    )
 )
 
 private fun f2(v: Double): String = try {
@@ -469,6 +526,12 @@ fun GeometryProTool() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "🔤 符号说明：" + fieldsOf(shape).joinToString("；") { it.label },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
             Spacer(Modifier.height(10.dp))
             fieldsOf(shape).forEach { f ->
                 LabeledField(
@@ -486,23 +549,37 @@ fun GeometryProTool() {
             SectionCard(title = "结果（未填写的为自动求出）") {
                 result.forEach { (label, value) -> InfoRow("$label：", value) }
                 Spacer(Modifier.height(8.dp))
+                Text(
+                    "🔤 符号说明：" + fieldsOf(shape).joinToString("；") { it.label },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(Modifier.height(8.dp))
                 CopyButton(result.joinToString("\n") { "${it.first}：${it.second}" })
             }
         }
-        SectionCard(title = "📘 常用几何公式") {
-            Text(
-                "• 圆：C=2πr，S=πr²\n" +
-                    "• 扇形：l=rθ（θ 为弧度），S=½lr\n" +
-                    "• 球：V=4πr³/3，S=4πr²\n" +
-                    "• 圆柱：V=πr²h，S侧=2πrh；外接球 R=√(r²+h²/4)\n" +
-                    "• 圆锥：V=πr²h/3，S侧=πrl；外接球 R=(r²+h²)/(2h)，内切球 r=rh/(r+l)\n" +
-                    "• 圆台：V=πh(R²+Rr+r²)/3，S侧=π(R+r)l\n" +
-                    "• 长方体：V=abc，S=2(ab+bc+ca)，外接球 R=√(a²+b²+c²)/2\n" +
-                    "• 正方体：S=6a²，V=a³，外接球 R=√3a/2，内切球 r=a/2\n" +
-                    "• 三角形：S=√[p(p-a)(p-b)(p-c)]，内切圆 r=S/p，外接圆 R=abc/(4S)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        SectionCard(title = "📘 常用几何公式（含符号说明）") {
+            GEO_FORMULAS.forEachIndexed { index, formula ->
+                if (index > 0) Spacer(Modifier.height(10.dp))
+                Text(
+                    formula.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(2.dp))
+                MathText(
+                    text = formula.expr,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "🔤 ${formula.legend}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

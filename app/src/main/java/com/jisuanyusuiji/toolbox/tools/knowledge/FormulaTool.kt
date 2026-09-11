@@ -97,6 +97,10 @@ fun FormulaTool() {
             FormulaDataMore.all + FormulaDataMore2.all + FormulaDataMore3.all + FormulaDataMore4.all)
             .map { it.toSubject() }
     }
+    // 提前算好每条公式的“符号说明”，用于展示、搜索与导出。
+    val legends = remember(allFormulas) {
+        allFormulas.associate { book.keyOf(it) to FormulaLegend.of(it) }
+    }
     val favorites = remember(favRefresh) { book.favorites() }
     val categories = remember {
         listOf("全部") + SUBJECT_ORDER.filter { subject -> allFormulas.any { it.category == subject } } +
@@ -118,6 +122,7 @@ fun FormulaTool() {
                     item.note.contains(query, true) ||
                     item.category.contains(query, true) ||
                     item.chapter.contains(query, true) ||
+                    (legends[book.keyOf(item)] ?: "").contains(query, true) ||
                     book.note(book.keyOf(item)).contains(query, true))
         }
     }
@@ -129,6 +134,7 @@ fun FormulaTool() {
                 appendLine("${i + 1}. ${f.name}")
                 appendLine("${f.category}${if (f.chapter.isNotBlank()) " · ${f.chapter}" else ""}")
                 appendLine(f.expression)
+                legends[book.keyOf(f)]?.takeIf { it.isNotBlank() }?.let { appendLine("符号说明：$it") }
                 val n = book.note(book.keyOf(f))
                 if (n.isNotBlank()) appendLine("笔记：$n")
                 appendLine()
@@ -264,6 +270,15 @@ fun FormulaTool() {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        val legend = legends[key].orEmpty()
+                        if (legend.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "🔤 符号说明：$legend",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                         if (myNote.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
                             Text(
@@ -273,7 +288,14 @@ fun FormulaTool() {
                             )
                         }
                         Spacer(Modifier.height(8.dp))
-                        CopyButton(text = "${formula.name}\n${formula.expression}\n${formula.note}")
+                        CopyButton(
+                            text = buildString {
+                                appendLine(formula.name)
+                                appendLine(formula.expression)
+                                if (formula.note.isNotBlank()) appendLine(formula.note)
+                                if (legend.isNotBlank()) appendLine("符号说明：$legend")
+                            }
+                        )
                     }
                 }
             }

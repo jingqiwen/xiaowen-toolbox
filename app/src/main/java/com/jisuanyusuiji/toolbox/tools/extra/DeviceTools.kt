@@ -37,7 +37,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,8 +50,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -225,56 +225,120 @@ fun CompassTool() {
             Text("本机没有磁力计/加速度计，无法使用指南针")
             return@Column
         }
-        Canvas(Modifier.size(280.dp)) {
-            val cx = size.width / 2f
+        Canvas(Modifier.size(300.dp)) {            val cx = size.width / 2f
             val cy = size.height / 2f
-            val radius = size.minDimension / 2f - 8f
-            drawCircle(Color(0xFFF5F5F5), radius = radius, center = Offset(cx, cy))
-            drawCircle(Color(0xFF37474F), radius = radius, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f))
-            // 刻度
-            for (i in 0 until 72) {
-                val angle = i * 5.0 * PI / 180.0
-                val long = i % 6 == 0
-                val r1 = radius - if (long) 22f else 10f
-                drawLine(
-                    if (long) Color(0xFF37474F) else Color(0xFFB0BEC5),
-                    start = Offset(cx + (r1 * sin(angle)).toFloat(), cy - (r1 * cos(angle)).toFloat()),
-                    end = Offset(cx + (radius * sin(angle)).toFloat(), cy - (radius * cos(angle)).toFloat()),
-                    strokeWidth = if (long) 4f else 2f
-                )
-            }
-            val paint = android.graphics.Paint().apply {
-                textAlign = android.graphics.Paint.Align.CENTER
-                textSize = 34f
-                isAntiAlias = true
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            }
-            drawIntoCanvas { canvas ->
-                canvas.save()
-                canvas.translate(cx, cy)
-                canvas.rotate(-azimuth)
-                val letters = listOf("N" to Color(0xFFD32F2F), "E" to Color(0xFF37474F), "S" to Color(0xFF37474F), "W" to Color(0xFF37474F))
-                letters.forEachIndexed { index, (text, color) ->
-                    val angle = index * 90.0 * PI / 180.0
-                    canvas.save()
-                    canvas.translate((radius * 0.78f * sin(angle)).toFloat(), -(radius * 0.78f * cos(angle)).toFloat())
-                    canvas.rotate(azimuth)
-                    paint.color = color.toArgb()
-                    canvas.nativeCanvas.drawText(text, 0f, paint.textSize / 3f, paint)
-                    canvas.restore()
+            val radius = size.minDimension / 2f - 10f
+            drawCircle(Color(0xFFFAFAFA), radius = radius, center = Offset(cx, cy))
+            drawCircle(Color(0xFF37474F), radius = radius, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f))
+            drawCircle(Color(0xFFCFD8DC), radius = radius - 30f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+
+            // 刻度盘：随方位角反向旋转，使 N 始终指向磁北
+            rotate(degrees = -azimuth, pivot = Offset(cx, cy)) {
+                for (deg in 0 until 360 step 2) {
+                    val angle = Math.toRadians(deg.toDouble())
+                    val isMajor = deg % 30 == 0
+                    val isMedium = deg % 10 == 0
+                    val isFive = deg % 5 == 0
+                    val tickLen = when {
+                        isMajor -> 22f
+                        isMedium -> 15f
+                        isFive -> 11f
+                        else -> 6f
+                    }
+                    val startRadius = radius - tickLen
+                    drawLine(
+                        color = when {
+                            isMajor -> Color(0xFF263238)
+                            isMedium -> Color(0xFF546E7A)
+                            else -> Color(0xFFB0BEC5)
+                        },
+                        start = Offset(
+                            cx + (startRadius * sin(angle)).toFloat(),
+                            cy - (startRadius * cos(angle)).toFloat()
+                        ),
+                        end = Offset(
+                            cx + (radius * sin(angle)).toFloat(),
+                            cy - (radius * cos(angle)).toFloat()
+                        ),
+                        strokeWidth = when {
+                            isMajor -> 3.5f
+                            isMedium -> 2.5f
+                            else -> 1.2f
+                        }
+                    )
                 }
-                canvas.restore()
+
+                val numberPaint = android.graphics.Paint().apply {
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    textSize = 13.dp.toPx()
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+                    color = android.graphics.Color.rgb(38, 50, 56)
+                }
+                val letterPaint = android.graphics.Paint().apply {
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    textSize = 22.dp.toPx()
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+                }
+                drawIntoCanvas { canvas ->
+                    // 每 30° 的数字（N/E/S/W 处用字母）
+                    for (deg in 30 until 360 step 30) {
+                        if (deg % 90 == 0) continue
+                        val angle = Math.toRadians(deg.toDouble())
+                        val r = radius - 44f
+                        canvas.save()
+                        canvas.translate(
+                            cx + (r * sin(angle)).toFloat(),
+                            cy - (r * cos(angle)).toFloat()
+                        )
+                        canvas.rotate(azimuth)
+                        canvas.nativeCanvas.drawText("$deg", 0f, numberPaint.textSize / 3f, numberPaint)
+                        canvas.restore()
+                    }
+                    // N / E / S / W
+                    listOf("N" to Color(0xFFD32F2F), "E" to Color(0xFF263238), "S" to Color(0xFF263238), "W" to Color(0xFF263238))
+                        .forEachIndexed { index, (text, color) ->
+                            val angle = index * 90.0 * PI / 180.0
+                            val r = radius - 62f
+                            canvas.save()
+                            canvas.translate(
+                                cx + (r * sin(angle)).toFloat(),
+                                cy - (r * cos(angle)).toFloat()
+                            )
+                            canvas.rotate(azimuth)
+                            letterPaint.color = color.toArgb()
+                            canvas.nativeCanvas.drawText(text, 0f, letterPaint.textSize / 3f, letterPaint)
+                            canvas.restore()
+                        }
+                }
             }
-            // 指针
-            drawLine(Color(0xFFD32F2F), Offset(cx, cy + 18f), Offset(cx, cy - radius * 0.62f), strokeWidth = 8f)
-            drawLine(Color(0xFF37474F), Offset(cx, cy - 18f), Offset(cx, cy + radius * 0.62f), strokeWidth = 8f)
-            drawCircle(Color.White, radius = 12f, center = Offset(cx, cy))
-            drawCircle(Color(0xFF37474F), radius = 12f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+
+            // 顶部固定指针：指针正对的方向就是手机朝向
+            val pointer = androidx.compose.ui.graphics.Path().apply {
+                moveTo(cx, cy - radius + 8f)
+                lineTo(cx - 14f, cy - radius + 30f)
+                lineTo(cx + 14f, cy - radius + 30f)
+                close()
+            }
+            drawPath(pointer, Color(0xFFD32F2F))
+            drawLine(Color(0xFFD32F2F), Offset(cx, cy), Offset(cx, cy - radius + 34f), strokeWidth = 4f)
+
+            // 中心圆盘
+            drawCircle(Color.White, radius = 26f, center = Offset(cx, cy))
+            drawCircle(Color(0xFF37474F), radius = 26f, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f))
+            drawCircle(Color(0xFFD32F2F), radius = 5f, center = Offset(cx, cy))
         }
         Spacer(Modifier.height(16.dp))
         Text("$direction  ${"%.0f".format(azimuth)}°", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "刻度：每 2° 一格、每 10° 一条长线、每 30° 标注角度；红色指针指向手机正前方。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(8.dp))
-        Text("请将手机平放，远离磁铁、金属和电子设备以保证准确度。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("请将手机平放，远离磁铁、金属和电子设备；走 8 字可校准磁力计。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -289,7 +353,6 @@ fun MirrorTool() {
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         )
     }
-    var mirror by remember { mutableStateOf(true) }
     var front by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -335,7 +398,6 @@ fun MirrorTool() {
             },
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { if (mirror) scaleX = -1f }
         )
         Column(
             Modifier
@@ -344,10 +406,11 @@ fun MirrorTool() {
                 .background(Color(0x88000000))
                 .padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("镜像显示", color = Color.White, modifier = Modifier.weight(1f))
-                Switch(checked = mirror, onCheckedChange = { mirror = it })
-            }
+            Text(
+                "画面按真实方向显示，不做左右翻转；前置摄像头也保持与后置一致的方向。",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (front) "当前：前置摄像头" else "当前：后置摄像头", color = Color.White, modifier = Modifier.weight(1f))
                 TextButton(onClick = { front = !front }) { Text("切换", color = Color.White) }

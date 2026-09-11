@@ -1,17 +1,20 @@
 package com.jisuanyusuiji.toolbox
 
+import com.jisuanyusuiji.toolbox.ui.components.MathNode
+import com.jisuanyusuiji.toolbox.ui.components.isPureNumber
+import com.jisuanyusuiji.toolbox.ui.components.parseMathNodes
+import com.jisuanyusuiji.toolbox.ui.components.plainText
 import com.jisuanyusuiji.toolbox.ui.components.prettifyMath
 import com.jisuanyusuiji.toolbox.ui.components.readMathToken
-import com.jisuanyusuiji.toolbox.ui.components.splitFraction
 import com.jisuanyusuiji.toolbox.ui.components.stripWrapper
-import com.jisuanyusuiji.toolbox.ui.components.topLevelPositions
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 公式排版组件（MathText）纯逻辑的单元测试。 */
 class MathTextLogicTest {
+
+    private fun plain(raw: String): String = plainText(parseMathNodes(prettifyMath(raw)))
 
     @Test
     fun prettify_replacesAsciiOperators() {
@@ -22,29 +25,93 @@ class MathTextLogicTest {
         assertEquals("√(2)", prettifyMath("sqrt(2)"))
         assertEquals("π", prettifyMath("pi"))
         assertEquals("a·b", prettifyMath("a*b"))
+        assertEquals("n - m", prettifyMath("n-m"))
+        assertEquals("x^2 - 1", prettifyMath("x^2-1"))
     }
 
     @Test
-    fun topLevelPositions_ignoresNested() {
-        assertEquals(listOf(1), topLevelPositions("a=(b+c)/(d)", '='))
-        assertEquals(emptyList<Int>(), topLevelPositions("(a=b)", '='))
-        assertEquals(listOf(1, 7), topLevelPositions("a=b+c*d=e", '='))
+    fun combination_usesStackedSubSuperscript() {
+        val nodes = parseMathNodes("C(n,m) = n!/[m!(n-m)!]")
+        val indexed = nodes.filterIsInstance<MathNode.Indexed>()
+        assertEquals(1, indexed.size)
+        assertEquals("C", indexed[0].letter)
+        assertEquals("n", plainText(indexed[0].sub))
+        assertEquals("m", plainText(indexed[0].sup))
+        // 不能退化成 C(n,m) 括号形式
+        assertTrue(indexed.isNotEmpty())
     }
 
     @Test
-    fun splitFraction_stacksSimpleFractions() {
-        assertEquals("a" to "(1-q)", splitFraction("a/(1-q)"))
-        assertEquals("pV" to "T", splitFraction("pV/T"))
-        assertNotNull(splitFraction("(-b ± √(b^2-4ac))/(2a)"))
-        assertNotNull(splitFraction("1/(2πi)"))
+    fun permutation_usesStackedSubSuperscript() {
+        val nodes = parseMathNodes("A(n,m)")
+        val indexed = nodes.filterIsInstance<MathNode.Indexed>()
+        assertEquals(1, indexed.size)
+        assertEquals("A", indexed[0].letter)
+        assertEquals("n", plainText(indexed[0].sub))
+        assertEquals("m", plainText(indexed[0].sup))
     }
 
     @Test
-    fun splitFraction_rejectsAmbiguousFractions() {
-        // 1/2mv^2 的 1/2 与后面因子连写，堆叠会改变含义，必须保持行内
-        assertNull(splitFraction("1/2mv^2"))
-        assertNull(splitFraction("x/2 + 1"))
-        assertNull(splitFraction("a/b/c"))
+    fun fraction_withParenDenominator_isStacked() {
+        val nodes = parseMathNodes("abc/(4S)")
+        assertEquals(1, nodes.size)
+        val frac = nodes[0] as MathNode.Frac
+        assertEquals("abc", plainText(frac.num))
+        assertEquals("(4S)", plainText(frac.den))
+    }
+
+    @Test
+    fun fraction_halfCoefficient_stacksOnlyTheNumber() {
+        // 1/2ab 在数学上表示 (1/2)·ab，不能堆成 1/(2ab)
+        val nodes = parseMathNodes("S = 1/2ab·sinC")
+        val frac = nodes.filterIsInstance<MathNode.Frac>().single()
+        assertEquals("1", plainText(frac.num))
+        assertEquals("2", plainText(frac.den))
+        assertTrue(plainText(nodes).endsWith("ab·sinC"))
+    }
+
+    @Test
+    fun fraction_groupedDenominator_keepsWholeGroup() {
+        val nodes = parseMathNodes(prettifyMath("S = a_1(1-q^n)/(1-q) (q≠1)"))
+        val frac = nodes.filterIsInstance<MathNode.Frac>().single()
+        assertTrue(plainText(frac.num).startsWith("a_1"))
+        assertEquals("(1 - q)", plainText(frac.den))
+        // 后面的条件不能吞进分母
+        assertTrue(plainText(nodes).contains("(q≠1)"))
+    }
+
+    @Test
+    fun fraction_insideParenthesesWithFactor_keepsFullDenominator() {
+        val nodes = parseMathNodes(prettifyMath("(1/2a)ln|(x-a)/(x+a)|+C"))
+        val fracs = nodes.filterIsInstance<MathNode.Frac>()
+        assertEquals(2, fracs.size)
+        assertEquals("2a", plainText(fracs[0].den))
+        assertEquals("(x + a)", plainText(fracs[1].den))
+    }
+
+    @Test
+    fun fraction_chainedDivision_isNotStacked() {
+        val nodes = parseMathNodes("a/b/c")
+        assertTrue(nodes.filterIsInstance<MathNode.Frac>().isEmpty())
+        assertEquals("a/b/c", plainText(nodes))
+    }
+
+    @Test
+    fun fraction_pureNumbers_areStacked() {
+        val nodes = parseMathNodes("w = 1/2(z+1/z)")
+        val fracs = nodes.filterIsInstance<MathNode.Frac>()
+        assertEquals("1", plainText(fracs[0].num))
+        assertEquals("2", plainText(fracs[0].den))
+        assertEquals("1", plainText(fracs[1].num))
+        assertEquals("z", plainText(fracs[1].den))
+    }
+
+    @Test
+    fun fraction_complexQuadratic_isStacked() {
+        val nodes = parseMathNodes(prettifyMath("x = (-b ± √(b^2-4ac)) / (2a)"))
+        val frac = nodes.filterIsInstance<MathNode.Frac>().single()
+        assertEquals("(-b ± √(b^2 - 4ac))", plainText(frac.num))
+        assertEquals("(2a)", plainText(frac.den))
     }
 
     @Test
@@ -67,5 +134,12 @@ class MathTextLogicTest {
         assertEquals("n-k", stripWrapper("(n-k)"))
         assertEquals("a", stripWrapper("a"))
         assertEquals("(a)(b)", stripWrapper("((a)(b))"))
+    }
+
+    @Test
+    fun pureNumber_detection() {
+        assertTrue(isPureNumber("12"))
+        assertTrue(isPureNumber("2.5"))
+        assertTrue(!isPureNumber("2a"))
     }
 }
