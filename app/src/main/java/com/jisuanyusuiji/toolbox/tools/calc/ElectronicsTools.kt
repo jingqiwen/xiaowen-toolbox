@@ -91,15 +91,44 @@ private fun reverseBands(ohm: Double): Pair<List<String>, Double>? {
     return listOf(digit1, digit2, multiplier, "金") to actual
 }
 
+/** 六环电阻的第六环：温度系数（ppm/K）。 */
+private val TEMPCO_BANDS = listOf("棕" to 100, "红" to 50, "橙" to 15, "黄" to 25, "蓝" to 10, "紫" to 5)
+
+/** 反向查色环（五/六环，三位有效数字）。 */
+private fun reverseBands3(ohm: Double): Pair<List<String>, Double>? {
+    if (ohm <= 0) return null
+    var e = kotlin.math.floor(log10(ohm)).toInt() - 2
+    var mantissa = (ohm / 10.0.pow(e)).toLong()
+    if ((ohm / 10.0.pow(e)) - mantissa >= 0.5) mantissa += 1
+    if (mantissa >= 1000) { mantissa /= 10; e += 1 }
+    if (mantissa < 100) return null
+    val d1 = (mantissa / 100) % 10
+    val d2 = (mantissa / 10) % 10
+    val d3 = mantissa % 10
+    val multColor = COLOR_BANDS.firstOrNull {
+        it.digit >= 0 && abs(it.multiplier - 10.0.pow(e)) < 1e-9
+    } ?: return null
+    val names = listOf(
+        COLOR_BANDS.first { it.digit == d1.toInt() }.name,
+        COLOR_BANDS.first { it.digit == d2.toInt() }.name,
+        COLOR_BANDS.first { it.digit == d3.toInt() }.name,
+        multColor.name
+    )
+    return names to mantissa * 10.0.pow(e)
+}
+
 // ============================================================
 // 24. 电阻色环计算器
 // ============================================================
 @Composable
 fun ResistorColorTool() {
+    var bandCount by remember { mutableStateOf(4) }
     var b1 by remember { mutableStateOf("棕") }
     var b2 by remember { mutableStateOf("黑") }
-    var b3 by remember { mutableStateOf("红") }
-    var b4 by remember { mutableStateOf("金") }
+    var b3 by remember { mutableStateOf("黑") }
+    var mult by remember { mutableStateOf("红") }
+    var tol by remember { mutableStateOf("金") }
+    var tempco by remember { mutableStateOf("棕") }
     var ohmText by remember { mutableStateOf("4700") }
     var forward by remember { mutableStateOf("") }
     var reverse by remember { mutableStateOf("") }
@@ -107,34 +136,86 @@ fun ResistorColorTool() {
 
     fun calcForward() {
         error = ""
-        val c1 = band(b1); val c2 = band(b2); val c3 = band(b3)
-        if (c1.digit < 0 || c2.digit < 0) { error = "四环电阻前两环必须是数字色（黑~白）"; return }
-        val ohm = (c1.digit * 10 + c2.digit) * c3.multiplier
-        val tol = band(b4).tolerance ?: 20.0
-        forward = "阻值：${fmtOhm(ohm)}\n误差：±${f3(tol)}%\n阻值范围：${fmtOhm(ohm * (1 - tol / 100))} ~ ${fmtOhm(ohm * (1 + tol / 100))}"
+        forward = ""
+        val digitColors = listOf(b1, b2, b3).take(if (bandCount == 4) 2 else 3)
+        val digits = digitColors.map { band(it).digit }
+        if (digits.any { it < 0 }) { error = "数字环必须是黑~白（不能是金/银）"; return }
+        val base = digits.fold(0L) { acc, dgt -> acc * 10 + dgt }
+        val ohm = base * band(mult).multiplier
+        val tolPercent = band(tol).tolerance ?: 20.0
+        val lines = mutableListOf(
+            "阻值：${fmtOhm(ohm)}",
+            "误差：±${f3(tolPercent)}%",
+            "阻值范围：${fmtOhm(ohm * (1 - tolPercent / 100))} ~ ${fmtOhm(ohm * (1 + tolPercent / 100))}"
+        )
+        if (bandCount == 6) {
+            val tc = TEMPCO_BANDS.firstOrNull { it.first == tempco }?.second
+            lines += "温度系数：${tc ?: "—"} ppm/K"
+        }
+        lines += "读数方式：" + when (bandCount) {
+            4 -> "前两环数字 ${digitColors.joinToString("-")} → 倍率 ${mult} 环 → 误差 ${tol} 环"
+            5 -> "前三环数字 ${digitColors.joinToString("-")} → 倍率 ${mult} 环 → 误差 ${tol} 环"
+            else -> "前三环数字 ${digitColors.joinToString("-")} → 倍率 ${mult} 环 → 误差 ${tol} 环 → 温度系数 ${tempco} 环"
+        }
+        forward = lines.joinToString("\n")
     }
 
     fun calcReverse() {
         error = ""
         reverse = ""
         val ohm = parseOhm(ohmText) ?: run { error = "请输入有效阻值（如 470、4.7k、1M）"; return }
-        val r = reverseBands(ohm) ?: run { error = "超出四环电阻可表示范围（约 0.1Ω ~ 99GΩ）"; return }
-        val bands = r.first
-        reverse = "推荐色环：${bands.joinToString(" - ")}\n实际标称值：${fmtOhm(r.second)}\n与原值误差：${f3(abs(r.second - ohm) / ohm * 100)}%"
+        val r = if (bandCount == 4) reverseBands(ohm) else reverseBands3(ohm)
+        if (r == null) {
+            error = if (bandCount == 4) "超出四环电阻可表示范围（约 0.1Ω ~ 99GΩ）"
+            else "超出五/六环电阻可表示范围（约 1Ω ~ 999GΩ）"
+            return
+        }
+        val bands = r.first + tol
+        reverse = "推荐色环（${bandCount} 环）：${bands.joinToString(" - ")}\n" +
+            "第 1~${if (bandCount == 4) 2 else 3} 环为有效数字，" +
+            "第 ${if (bandCount == 4) 3 else 4} 环为倍率，第 ${if (bandCount == 4) 4 else 5} 环为误差" +
+            (if (bandCount == 6) "，第 6 环为温度系数（建议 $tempco）" else "") + "\n" +
+            "标称值：${fmtOhm(r.second)}（±${f3(band(tol).tolerance ?: 20.0)}%）\n" +
+            "与原值误差：${f3(abs(r.second - ohm) / ohm * 100)}%"
     }
 
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SectionCard(title = "色环 → 阻值（四环）") {
-            SelectorField("第 1 环（数字）", b1, COLOR_BANDS.take(10).map { it.name }, { b1 = it })
-            Spacer(Modifier.height(8.dp))
-            SelectorField("第 2 环（数字）", b2, COLOR_BANDS.take(10).map { it.name }, { b2 = it })
-            Spacer(Modifier.height(8.dp))
-            SelectorField("第 3 环（倍率）", b3, COLOR_BANDS.map { it.name }, { b3 = it })
-            Spacer(Modifier.height(8.dp))
-            SelectorField("第 4 环（误差）", b4, COLOR_BANDS.filter { it.tolerance != null }.map { it.name } + "无色", { b4 = it })
+        SectionCard(title = "选择电阻色环数量") {
+            SelectorField(
+                "色环数量",
+                if (bandCount == 4) "四环（普通碳膜）" else if (bandCount == 5) "五环（精密）" else "六环（精密+温度系数）",
+                listOf("四环（普通碳膜）", "五环（精密）", "六环（精密+温度系数）"),
+                { bandCount = if (it.startsWith("四")) 4 else if (it.startsWith("五")) 5 else 6 }
+            )
+        }
+
+        SectionCard(title = "色环 → 阻值（${bandCount} 环）") {
+            if (bandCount == 4) {
+                SelectorField("第 1 环（数字）", b1, COLOR_BANDS.take(10).map { it.name }, { b1 = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 2 环（数字）", b2, COLOR_BANDS.take(10).map { it.name }, { b2 = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 3 环（倍率）", mult, COLOR_BANDS.map { it.name }, { mult = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 4 环（误差）", tol, COLOR_BANDS.filter { it.tolerance != null }.map { it.name } + "无色", { tol = it })
+            } else {
+                SelectorField("第 1 环（数字）", b1, COLOR_BANDS.take(10).map { it.name }, { b1 = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 2 环（数字）", b2, COLOR_BANDS.take(10).map { it.name }, { b2 = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 3 环（数字）", b3, COLOR_BANDS.take(10).map { it.name }, { b3 = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 4 环（倍率）", mult, COLOR_BANDS.map { it.name }, { mult = it })
+                Spacer(Modifier.height(8.dp))
+                SelectorField("第 5 环（误差）", tol, COLOR_BANDS.filter { it.tolerance != null }.map { it.name } + "无色", { tol = it })
+                if (bandCount == 6) {
+                    Spacer(Modifier.height(8.dp))
+                    SelectorField("第 6 环（温度系数）", tempco, TEMPCO_BANDS.map { it.first } + "无色", { tempco = it })
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Button(onClick = { calcForward() }, modifier = Modifier.fillMaxWidth()) { Text("读取阻值") }
             if (forward.isNotBlank()) {
@@ -143,7 +224,7 @@ fun ResistorColorTool() {
             }
         }
 
-        SectionCard(title = "阻值 → 色环（反查）") {
+        SectionCard(title = "阻值 → 色环（反查，当前 ${bandCount} 环）") {
             LabeledField(ohmText, { ohmText = it }, "输入阻值（如 470、4.7k、1M）")
             Spacer(Modifier.height(12.dp))
             Button(onClick = { calcReverse() }, modifier = Modifier.fillMaxWidth()) { Text("反查色环") }
@@ -151,6 +232,19 @@ fun ResistorColorTool() {
                 Spacer(Modifier.height(8.dp))
                 Text(reverse, fontWeight = FontWeight.Bold)
             }
+        }
+
+        SectionCard(title = "电阻色环怎么读") {
+            Text(
+                "① 颜色对应数字：黑 0、棕 1、红 2、橙 3、黄 4、绿 5、蓝 6、紫 7、灰 8、白 9。\n" +
+                    "② 四环：第 1、2 环是有效数字，第 3 环是倍率（×10ⁿ），第 4 环是误差（金 ±5%、银 ±10%、棕 ±1%、无色 ±20%）。\n" +
+                    "③ 五环：第 1、2、3 环是有效数字，第 4 环是倍率，第 5 环是误差，精度更高。\n" +
+                    "④ 六环：前五环同五环，第 6 环是温度系数（棕 100、红 50、橙 15、黄 25、蓝 10、紫 5 ppm/K）。\n" +
+                    "⑤ 判方向：误差环（金/银/棕）一般单独在最后；最后一环与前面环之间的间距通常略大；实在分不清时，用万用表量一下再反查。\n" +
+                    "⑥ 例：棕-黑-红-金 = 10×100 Ω = 1 kΩ，误差 ±5%；红-红-黑-棕-棕 = 220×10 Ω = 2.2 kΩ，误差 ±1%。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         ErrorText(error)
     }

@@ -198,6 +198,45 @@ fun FunctionGraphTool() {
             if (y1 <= 0 && y2 >= 0) drawLine(Color(0xFF546E7A), androidx.compose.ui.geometry.Offset(0f, sy(0.0)), androidx.compose.ui.geometry.Offset(width, sy(0.0)), strokeWidth = 3f)
             if (x1 <= 0 && x2 >= 0) drawLine(Color(0xFF546E7A), androidx.compose.ui.geometry.Offset(sx(0.0), 0f), androidx.compose.ui.geometry.Offset(sx(0.0), height), strokeWidth = 3f)
 
+            // 刻度数值标注
+            val labelPaint = android.graphics.Paint().apply {
+                color = 0xFF37474F.toInt()
+                textSize = if (exported) 26f else 22f
+                isAntiAlias = true
+            }
+            val axisPaint = android.graphics.Paint().apply {
+                color = 0xFF546E7A.toInt()
+                textSize = if (exported) 28f else 24f
+                isAntiAlias = true
+                isFakeBoldText = true
+            }
+            drawIntoCanvas { canvas ->
+                val nc = canvas.nativeCanvas
+                val zeroY = if (y1 <= 0 && y2 >= 0) sy(0.0) else height - 6f
+                val zeroX = if (x1 <= 0 && x2 >= 0) sx(0.0) else 34f
+                var tx = kotlin.math.ceil(x1 / xStep) * xStep
+                while (tx <= x2 + 1e-9) {
+                    val px = sx(tx)
+                    if (abs(tx) > 1e-9) {
+                        drawLine(Color(0xFF90A4AE), androidx.compose.ui.geometry.Offset(px, zeroY - 6f), androidx.compose.ui.geometry.Offset(px, zeroY + 6f), strokeWidth = 2f)
+                        nc.drawText(formatTick(tx), px + 4f, zeroY + 26f, labelPaint)
+                    }
+                    tx += xStep
+                }
+                var ty = kotlin.math.ceil(y1 / yStep) * yStep
+                while (ty <= y2 + 1e-9) {
+                    val py = sy(ty)
+                    if (abs(ty) > 1e-9) {
+                        drawLine(Color(0xFF90A4AE), androidx.compose.ui.geometry.Offset(zeroX - 6f, py), androidx.compose.ui.geometry.Offset(zeroX + 6f, py), strokeWidth = 2f)
+                        nc.drawText(formatTick(ty), zeroX + 8f, py - 6f, labelPaint)
+                    }
+                    ty += yStep
+                }
+                nc.drawText("O", zeroX + 6f, zeroY + 26f, axisPaint)
+                nc.drawText("x", width - 18f, zeroY - 8f, axisPaint)
+                nc.drawText("y", zeroX + 8f, 24f, axisPaint)
+            }
+
             val h = holderAt(0.0, 0.0, 0.0, 0.0)
             when (mode) {
                 "显函数 y=f(x)" -> {
@@ -314,7 +353,17 @@ fun FunctionGraphTool() {
                 LabeledField(e3, { e3 = it }, "第三条曲线 y =")
             }
             Spacer(Modifier.height(8.dp))
-            Text("支持：sin cos tan ln log sqrt abs exp ^ ! pi e，变量 x/y/t/θ，参数 a b c d，可用 min/max/pow/mod。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "写法示例：\n" +
+                    "· sinx 或 sin(x) 都可以；tanx、lnx、sqrtx 同理\n" +
+                    "· 2x 表示 2×x；2(x+1)、3sinx、x(x-1) 都支持\n" +
+                    "· 幂：x^2、x^3；根号：sqrt(x)；绝对值：abs(x)\n" +
+                    "· 常量：pi、π、e；指数：e^x 或 exp(x)\n" +
+                    "· 变量：x、y、t、θ；参数：a、b、c、d（可用下方滑块或直接输入）\n" +
+                    "· 其他函数：log（常用对数）、ln（自然对数）、min、max、pow、mod、floor、round",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         SectionCard(title = "坐标范围") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -351,6 +400,13 @@ fun FunctionGraphTool() {
             ) {
                 drawGraph(size.width, size.height, this)
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "坐标轴标注：x 每格 ${formatTick(niceStep((range[1] - range[0]) / 10.0))}，" +
+                    "y 每格 ${formatTick(niceStep((range[3] - range[2]) / 10.0))}，原点为 O，标注随范围自动调整。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { export() }, modifier = Modifier.weight(1f)) { Text("导出图片") }
@@ -369,10 +425,38 @@ fun FunctionGraphTool() {
 
 @Composable
 private fun ParamSlider(name: String, value: Float, onChange: (Float) -> Unit) {
-    Column {
-        Text("$name = ${"%.2f".format(value)}", style = MaterialTheme.typography.bodyMedium)
-        Slider(value = value, onValueChange = onChange, valueRange = -5f..5f)
+    var text by remember(name, value) {
+        mutableStateOf(if (value == value.toInt().toFloat()) value.toInt().toString() else "%.3f".format(value).trimEnd('0').trimEnd('.'))
     }
+    Column {
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("$name =", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 6.dp))
+            androidx.compose.material3.OutlinedTextField(
+                value = text,
+                onValueChange = { t ->
+                    text = t
+                    t.toFloatOrNull()?.let(onChange)
+                },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            )
+        }
+        Slider(
+            value = value.coerceIn(-5f, 5f),
+            onValueChange = {
+                onChange(it)
+                text = if (it == it.toInt().toFloat()) it.toInt().toString() else "%.3f".format(it).trimEnd('0').trimEnd('.')
+            },
+            valueRange = -5f..5f
+        )
+    }
+}
+
+private fun formatTick(v: Double): String {
+    if (abs(v) < 1e-12) return "0"
+    return if (abs(v) >= 1e5 || abs(v) < 1e-4) "%.1e".format(v)
+    else java.math.BigDecimal(v).setScale(4, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 }
 
 private fun niceStep(raw: Double): Double {

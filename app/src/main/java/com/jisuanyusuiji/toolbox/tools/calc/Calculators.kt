@@ -127,7 +127,7 @@ fun BasicCalculatorTool() {
             listOf("4", "5", "6", "×"),
             listOf("1", "2", "3", "-"),
             listOf("0", ".", "%", "+"),
-            listOf("=")
+            listOf("π", "e", "=")
         )
         rows.forEach { row ->
             Row(
@@ -177,6 +177,7 @@ fun ScientificCalculatorTool() {
     var expression by remember { mutableStateOf("") }
     var resultText by remember { mutableStateOf("") }
     var complexMode by remember { mutableStateOf(false) }
+    var secondMode by remember { mutableStateOf(false) }
 
     fun press(key: String) {
         when (key) {
@@ -192,12 +193,11 @@ fun ScientificCalculatorTool() {
                     resultText = if (r.ok && r.value != null) formatNumber(r.value) else (r.error ?: "错误")
                 }
             }
-            "sin", "cos", "tan", "log", "ln" -> expression += "$key("
+            "sin", "cos", "tan", "asin", "acos", "atan", "log", "ln", "lb", "exp" -> expression += "$key("
             "√" -> expression += "sqrt("
             "x²" -> expression += "^2"
             "xⁿ" -> expression += "^"
             "π" -> expression += "pi"
-            "e" -> expression += "e"
             else -> expression += key
         }
     }
@@ -238,6 +238,18 @@ fun ScientificCalculatorTool() {
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                Text("2nd 模式（arc / exp）", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "开启后 sin/cos/tan 变为 asin/acos/atan，log 变为 exp，ln 变为 lb（以 2 为底）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = secondMode, onCheckedChange = { secondMode = it })
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text("复数模式", style = MaterialTheme.typography.bodyLarge)
                 Text(
                     "支持 (1+2i)*(3-4i) 形式的 + - × ÷ 运算",
@@ -248,9 +260,11 @@ fun ScientificCalculatorTool() {
             Switch(checked = complexMode, onCheckedChange = { complexMode = it })
         }
 
+        val trigRow = if (secondMode) listOf("asin", "acos", "atan", "exp", "lb")
+        else listOf("sin", "cos", "tan", "log", "ln")
         val rows = listOf(
             listOf("C", "⌫", "(", ")", "÷"),
-            listOf("sin", "cos", "tan", "log", "ln"),
+            trigRow,
             listOf("7", "8", "9", "×", "√"),
             listOf("4", "5", "6", "-", "x²"),
             listOf("1", "2", "3", "+", "xⁿ"),
@@ -263,7 +277,7 @@ fun ScientificCalculatorTool() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 row.forEach { key ->
-                    val function = key in setOf("sin", "cos", "tan", "log", "ln", "√", "x²", "xⁿ")
+                    val function = key in setOf("sin", "cos", "tan", "asin", "acos", "atan", "log", "ln", "lb", "exp", "√", "x²", "xⁿ")
                     val accent = key == "=" || key == "C"
                     Button(
                         onClick = { press(key) },
@@ -283,6 +297,19 @@ fun ScientificCalculatorTool() {
                     ) { Text(key, fontSize = if (key.length > 1) 14.sp else 20.sp) }
                 }
             }
+        }
+
+        SectionCard(title = "输入格式说明") {
+            Text(
+                "· 支持隐式乘法：2(3+1)、9π、2pi、3sin(2)、(1+2)(3+4)\n" +
+                    "· 括号右括号可省略：tan(2pi 会自动补成 tan(2pi)\n" +
+                    "· 常量：π、pi、e 都可以直接写（e 是自然常数 2.718…）\n" +
+                    "· 对数：log(x) 为常用对数（以 10 为底），log(真数, 底数) 可指定底数；ln(x) 为自然对数，lb(x) 为以 2 为底\n" +
+                    "· 其他函数：sqrt、cbrt、abs、exp；反三角：asin/arcsin、acos、atan\n" +
+                    "· 复数模式支持 (1+2i)*(3-4i) 这类写法",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

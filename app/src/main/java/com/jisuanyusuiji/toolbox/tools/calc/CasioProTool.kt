@@ -40,43 +40,18 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sqrt
+import java.math.BigDecimal
+import java.math.RoundingMode
 
-private data class SciConstant(val name: String, val symbol: String, val value: String, val unit: String)
-
-private val CONSTANTS = listOf(
-    SciConstant("真空中光速", "c", "2.99792458×10⁸", "m/s"),
-    SciConstant("普朗克常数", "h", "6.62607015×10⁻³⁴", "J·s"),
-    SciConstant("约化普朗克常数", "ħ", "1.054571817×10⁻³⁴", "J·s"),
-    SciConstant("元电荷", "e", "1.602176634×10⁻¹⁹", "C"),
-    SciConstant("电子质量", "mₑ", "9.1093837015×10⁻³¹", "kg"),
-    SciConstant("质子质量", "mₚ", "1.67262192369×10⁻²⁷", "kg"),
-    SciConstant("中子质量", "mₙ", "1.67492749804×10⁻²⁷", "kg"),
-    SciConstant("阿伏伽德罗常数", "Nₐ", "6.02214076×10²³", "/mol"),
-    SciConstant("玻尔兹曼常数", "k", "1.380649×10⁻²³", "J/K"),
-    SciConstant("理想气体常数", "R", "8.314462618", "J/(mol·K)"),
-    SciConstant("引力常数", "G", "6.67430×10⁻¹¹", "N·m²/kg²"),
-    SciConstant("标准重力加速度", "g", "9.80665", "m/s²"),
-    SciConstant("真空介电常数", "ε₀", "8.8541878128×10⁻¹²", "F/m"),
-    SciConstant("真空磁导率", "μ₀", "1.25663706212×10⁻⁶", "N/A²"),
-    SciConstant("库仑常数", "kₑ", "8.9875517923×10⁹", "N·m²/C²"),
-    SciConstant("法拉第常数", "F", "96485.33212", "C/mol"),
-    SciConstant("斯特藩-玻尔兹曼常数", "σ", "5.670374419×10⁻⁸", "W/(m²·K⁴)"),
-    SciConstant("维恩位移常数", "b", "2.897771955×10⁻³", "m·K"),
-    SciConstant("里德伯常数", "R∞", "1.0973731568160×10⁷", "1/m"),
-    SciConstant("玻尔半径", "a₀", "5.29177210903×10⁻¹¹", "m"),
-    SciConstant("电子伏特", "eV", "1.602176634×10⁻¹⁹", "J"),
-    SciConstant("原子质量单位", "u", "1.66053906660×10⁻²⁷", "kg"),
-    SciConstant("标准大气压", "atm", "101325", "Pa"),
-    SciConstant("冰点温度", "T₀", "273.15", "K"),
-    SciConstant("绝对零度", "0K", "-273.15", "℃"),
-    SciConstant("水的密度（4℃）", "ρ水", "999.972", "kg/m³"),
-    SciConstant("空气中的声速（20℃）", "v声", "343.2", "m/s"),
-    SciConstant("地球质量", "M⊕", "5.9722×10²⁴", "kg"),
-    SciConstant("地球半径", "R⊕", "6.371×10⁶", "m"),
-    SciConstant("天文单位", "AU", "1.495978707×10¹¹", "m"),
-    SciConstant("光年", "ly", "9.4607304725808×10¹⁵", "m"),
-    SciConstant("秒差距", "pc", "3.085677581491×10¹⁶", "m")
-)
+/** 数值显示：最多保留两位小数、不显示多余的 0；极小/极大数使用科学计数法。 */
+internal fun fmtNum(v: Double): String {
+    if (v.isNaN()) return "NaN"
+    if (v.isInfinite()) return if (v > 0) "∞" else "-∞"
+    if (v == 0.0) return "0"
+    val a = abs(v)
+    if (a < 0.01 || a >= 1e9) return "%.4e".format(v)
+    return BigDecimal(v).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+}
 
 private data class UnitGroup(val name: String, val units: List<Pair<String, Double>>)
 
@@ -110,7 +85,8 @@ fun CasioProTool() {
         val v = nums(text)
         if (v.size < 2) throw IllegalArgumentException("至少输入两个数字")
         val m = v.sum() / v.size
-        val variance = v.sumOf { (it - m) * (it - m) } / (v.size - 1)
+        val sampleVar = v.sumOf { (it - m) * (it - m) } / (v.size - 1)
+        val popVar = v.sumOf { (it - m) * (it - m) } / v.size
         val sorted = v.sorted()
         fun q(p: Double): Double {
             val pos = (sorted.size - 1) * p
@@ -119,16 +95,18 @@ fun CasioProTool() {
         }
         result = listOf(
             "样本数 n" to "${v.size}",
-            "平均值 x̄" to "%.6f".format(m),
-            "样本标准差 s" to "%.6f".format(sqrt(variance)),
-            "样本方差 s²" to "%.6f".format(variance),
-            "标准误 SEM" to "%.6f".format(sqrt(variance / v.size)),
-            "最小值" to "%.6f".format(sorted.first()),
-            "Q1" to "%.6f".format(q(0.25)),
-            "中位数" to "%.6f".format(q(0.5)),
-            "Q3" to "%.6f".format(q(0.75)),
-            "最大值" to "%.6f".format(sorted.last()),
-            "极差" to "%.6f".format(sorted.last() - sorted.first())
+            "平均值 x̄" to fmtNum(m),
+            "总体方差 σ²" to fmtNum(popVar),
+            "总体标准差 σ" to fmtNum(sqrt(popVar)),
+            "样本方差 s²" to fmtNum(sampleVar),
+            "样本标准差 s" to fmtNum(sqrt(sampleVar)),
+            "标准误 SEM" to fmtNum(sqrt(sampleVar / v.size)),
+            "最小值" to fmtNum(sorted.first()),
+            "Q1" to fmtNum(q(0.25)),
+            "中位数" to fmtNum(q(0.5)),
+            "Q3" to fmtNum(q(0.75)),
+            "最大值" to fmtNum(sorted.last()),
+            "极差" to fmtNum(sorted.last() - sorted.first())
         )
     }
 
@@ -155,7 +133,7 @@ fun CasioProTool() {
         when (regMode) {
             "线性 y=a+bx" -> {
                 val f = linfit(x, y)
-                result = listOf("a（截距）" to "%.6f".format(f[0]), "b（斜率）" to "%.6f".format(f[1]), "R²" to "%.6f".format(f[2]))
+                result = listOf("a（截距）" to fmtNum(f[0]), "b（斜率）" to fmtNum(f[1]), "R²" to fmtNum(f[2]))
             }
             "二次 y=a+bx+cx²" -> {
                 val n = x.size
@@ -181,22 +159,22 @@ fun CasioProTool() {
                 val my = y.sum() / n
                 val ssTot = y.sumOf { (it - my) * (it - my) }
                 val ssRes = x.indices.sumOf { val p = a2 + b2 * x[it] + c2 * x[it] * x[it]; (y[it] - p) * (y[it] - p) }
-                result = listOf("a" to "%.6f".format(a2), "b" to "%.6f".format(b2), "c" to "%.6f".format(c2), "R²" to "%.6f".format(if (ssTot < 1e-12) 1.0 else 1 - ssRes / ssTot))
+                result = listOf("a" to fmtNum(a2), "b" to fmtNum(b2), "c" to fmtNum(c2), "R²" to fmtNum(if (ssTot < 1e-12) 1.0 else 1 - ssRes / ssTot))
             }
             "指数 y=a·e^(bx)" -> {
                 val ly = y.map { ln(it) }
                 val f = linfit(x, ly)
-                result = listOf("a" to "%.6f".format(exp(f[0])), "b" to "%.6f".format(f[1]), "R²" to "%.6f".format(f[2]))
+                result = listOf("a" to fmtNum(exp(f[0])), "b" to fmtNum(f[1]), "R²" to fmtNum(f[2]))
             }
             "对数 y=a+b·ln(x)" -> {
                 val lx = x.map { ln(it) }
                 val f = linfit(lx, y)
-                result = listOf("a" to "%.6f".format(f[0]), "b" to "%.6f".format(f[1]), "R²" to "%.6f".format(f[2]))
+                result = listOf("a" to fmtNum(f[0]), "b" to fmtNum(f[1]), "R²" to fmtNum(f[2]))
             }
             else -> {
                 val lx = x.map { ln(it) }; val ly = y.map { ln(it) }
                 val f = linfit(lx, ly)
-                result = listOf("a" to "%.6f".format(exp(f[0])), "b（指数）" to "%.6f".format(f[1]), "R²" to "%.6f".format(f[2]))
+                result = listOf("a" to fmtNum(exp(f[0])), "b（指数）" to fmtNum(f[1]), "R²" to fmtNum(f[2]))
             }
         }
     }
@@ -213,7 +191,7 @@ fun CasioProTool() {
             val y = try {
                 GraphParser(expr) { name -> if (name == "x") x else null }.parse()
             } catch (_: Exception) { Double.NaN }
-            rows.add("%.4f".format(x) to "%.6f".format(y))
+            rows.add(fmtNum(x) to fmtNum(y))
             x += step
             if (++count > 500) break
         }
@@ -223,25 +201,52 @@ fun CasioProTool() {
     fun calcVector(op: String) {
         val a = nums(p1)
         val b = nums(p2)
-        if (a.size < 2 || b.size < 2) throw IllegalArgumentException("向量至少需要 2 个分量（用逗号分隔）")
-        fun dot(u: List<Double>, v: List<Double>) = u.indices.sumOf { u[it] * v[it] }
+        if (a.size < 2) throw IllegalArgumentException("向量 A 至少需要 2 个分量（示例：1,2,3 或 (1,2,3)）")
+        if (op != "模长 |A|" && op != "单位向量 A/|A|" && b.size < 2) {
+            throw IllegalArgumentException("向量 B 至少需要 2 个分量（示例：4,5,6）")
+        }
+        fun dot(u: List<Double>, v: List<Double>) = u.indices.sumOf { u[it] * v.getOrElse(it) { 0.0 } }
         fun norm(u: List<Double>) = sqrt(u.sumOf { it * it })
+        fun vecText(u: List<Double>) = "(" + u.joinToString(", ") { fmtNum(it) } + ")"
+        fun add(): List<Double> = a.indices.map { a[it] + b.getOrElse(it) { 0.0 } }
+        fun sub(): List<Double> = a.indices.map { a[it] - b.getOrElse(it) { 0.0 } }
+        fun angleText(): String {
+            val cosT = (dot(a, b) / (norm(a) * norm(b))).coerceIn(-1.0, 1.0)
+            return fmtNum(Math.toDegrees(kotlin.math.acos(cosT))) + "°"
+        }
+        fun crossOrNull(): List<Double>? = if (a.size >= 3 && b.size >= 3) {
+            listOf(
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            )
+        } else null
+
         result = when (op) {
-            "A + B" -> listOf("A+B" to (a.indices).joinToString(", ") { "%.4f".format(a[it] + b.getOrElse(it) { 0.0 }) })
-            "A − B" -> listOf("A−B" to (a.indices).joinToString(", ") { "%.4f".format(a[it] - b.getOrElse(it) { 0.0 }) })
-            "点积 A·B" -> listOf("A·B" to "%.6f".format(dot(a, b)))
-            "模长 |A|" -> listOf("|A|" to "%.6f".format(norm(a)), "|B|" to "%.6f".format(norm(b)))
-            "单位向量 A/|A|" -> listOf("A 的单位向量" to a.joinToString(", ") { "%.6f".format(it / norm(a)) })
+            "全部结果" -> buildList {
+                add("A" to vecText(a))
+                add("B" to vecText(b))
+                add("|A|" to fmtNum(norm(a)))
+                add("|B|" to fmtNum(norm(b)))
+                add("A + B" to vecText(add()))
+                add("A − B" to vecText(sub()))
+                add("A·B（点积）" to fmtNum(dot(a, b)))
+                add("A 的单位向量" to vecText(a.map { it / norm(a) }))
+                add("A、B 夹角" to angleText())
+                crossOrNull()?.let { add("A×B（叉积）" to vecText(it)) }
+            }
+            "A + B" -> listOf("A+B" to vecText(add()))
+            "A − B" -> listOf("A−B" to vecText(sub()))
+            "点积 A·B" -> listOf("A·B" to fmtNum(dot(a, b)))
+            "模长 |A|" -> listOf("|A|" to fmtNum(norm(a)), "|B|" to if (b.size >= 2) fmtNum(norm(b)) else "—")
+            "单位向量 A/|A|" -> listOf("A 的单位向量" to vecText(a.map { it / norm(a) }))
             "夹角" -> {
                 val cosT = dot(a, b) / (norm(a) * norm(b))
-                listOf("cosθ" to "%.6f".format(cosT), "θ" to "%.4f°".format(Math.toDegrees(kotlin.math.acos(cosT.coerceIn(-1.0, 1.0)))))
+                listOf("cosθ" to fmtNum(cosT), "θ" to angleText())
             }
             else -> {
-                if (a.size < 3 || b.size < 3) throw IllegalArgumentException("叉积需要 3 维向量")
-                val cx = a[1] * b[2] - a[2] * b[1]
-                val cy = a[2] * b[0] - a[0] * b[2]
-                val cz = a[0] * b[1] - a[1] * b[0]
-                listOf("A×B" to "%.4f, %.4f, %.4f".format(cx, cy, cz))
+                val cross = crossOrNull() ?: throw IllegalArgumentException("叉积需要 3 维向量")
+                listOf("A×B" to vecText(cross))
             }
         }
     }
@@ -250,26 +255,67 @@ fun CasioProTool() {
         val a = p1.toDoubleOrNull() ?: throw IllegalArgumentException("a 无效")
         val b = p2.toDoubleOrNull() ?: throw IllegalArgumentException("b 无效")
         val c = p3.toDoubleOrNull() ?: throw IllegalArgumentException("c 无效")
+        val greater = op.contains(">") || op.contains("≥")   // 解集在“大于”一侧
+        val strict = !op.contains("≥") && !op.contains("≤")   // 是否为严格不等式
+
         if (a == 0.0) {
-            val x = -c / b
-            result = listOf("退化为一次" to "解集参考 x ${if (b > 0) ">" else "<"} ${"%.4f".format(x)}（请按符号判断）")
+            if (b == 0.0) {
+                val holds = if (greater) c > 0 else c < 0
+                result = listOf("这是一次（退化）不等式" to if (holds) "解集：全体实数 R" else "解集：空集 ∅")
+                return
+            }
+            val r = -c / b
+            val ans = when {
+                b > 0 && greater -> if (strict) "x > ${fmtNum(r)}" else "x ≥ ${fmtNum(r)}"
+                b > 0 -> if (strict) "x < ${fmtNum(r)}" else "x ≤ ${fmtNum(r)}"
+                greater -> if (strict) "x < ${fmtNum(r)}" else "x ≤ ${fmtNum(r)}"
+                else -> if (strict) "x > ${fmtNum(r)}" else "x ≥ ${fmtNum(r)}"
+            }
+            result = listOf("这是一次不等式（a=0）" to "解集：$ans")
             return
         }
+
         val delta = b * b - 4 * a * c
-        val rootText = if (delta >= 0) {
-            val r1 = (-b - sqrt(delta)) / (2 * a)
-            val r2 = (-b + sqrt(delta)) / (2 * a)
-            "根：x₁=%.4f，x₂=%.4f".format(minOf(r1, r2), maxOf(r1, r2))
-        } else "无实根（Δ<0）"
-        result = listOf(
-            "判别式 Δ" to "%.4f".format(delta),
-            "根" to rootText,
-            "提示" to when {
-                delta < 0 && a > 0 && op.contains(">") -> "因为 a>0 且 Δ<0，对所有实数成立"
-                delta < 0 && a < 0 && op.contains(">") -> "空集（无解）"
-                delta < 0 -> "请结合抛物线开口方向判断"
-                else -> "解集为两根之间或两根之外，取决于开口方向和不等号方向"
+        val eps = 1e-12
+        val r1 = if (delta > -eps) (-b - sqrt(maxOf(delta, 0.0))) / (2 * a) else Double.NaN
+        val r2 = if (delta > -eps) (-b + sqrt(maxOf(delta, 0.0))) / (2 * a) else Double.NaN
+        val lo = minOf(r1, r2)
+        val hi = maxOf(r1, r2)
+
+        val ans = when {
+            delta < -eps -> if (a > 0) {
+                if (greater) "全体实数 R（开口向上且恒大于 0）" else "空集 ∅（开口向上，恒大于 0）"
+            } else {
+                if (greater) "空集 ∅（开口向下，恒小于 0）" else "全体实数 R（开口向下且恒小于 0）"
             }
+            delta <= eps -> {
+                val r = -b / (2 * a)
+                if (a > 0) {
+                    when {
+                        greater -> if (strict) "x ≠ ${fmtNum(r)}" else "全体实数 R"
+                        else -> if (strict) "空集 ∅" else "x = ${fmtNum(r)}"
+                    }
+                } else {
+                    when {
+                        greater -> if (strict) "空集 ∅" else "x = ${fmtNum(r)}"
+                        else -> if (strict) "x ≠ ${fmtNum(r)}" else "全体实数 R"
+                    }
+                }
+            }
+            else -> {
+                val between = if (strict) "${fmtNum(lo)} < x < ${fmtNum(hi)}" else "${fmtNum(lo)} ≤ x ≤ ${fmtNum(hi)}"
+                val outside = if (strict) "x < ${fmtNum(lo)} 或 x > ${fmtNum(hi)}" else "x ≤ ${fmtNum(lo)} 或 x ≥ ${fmtNum(hi)}"
+                if (a > 0) (if (greater) outside else between) else (if (greater) between else outside)
+            }
+        }
+        result = listOf(
+            "判别式 Δ = b²-4ac" to fmtNum(delta),
+            "对应方程 ax²+bx+c=0 的根" to when {
+                delta < -eps -> "无实根"
+                delta <= eps -> "x₁ = x₂ = ${fmtNum(-b / (2 * a))}"
+                else -> "x₁ = ${fmtNum(lo)}，x₂ = ${fmtNum(hi)}"
+            },
+            "解集（直接答案）" to ans
         )
     }
 
@@ -316,28 +362,56 @@ fun CasioProTool() {
                     try { calcTable() } catch (e: Exception) { error = e.message ?: "错误" }
                 }, modifier = Modifier.fillMaxWidth()) { Text("生成表格") }
             }
-            "常量表" -> SectionCard(title = "科学常数表（${CONSTANTS.size} 条）") {
-                CONSTANTS.forEach { c ->
-                    InfoRow("${c.name}（${c.symbol}）", "${c.value} ${c.unit}")
-                }
+            "常量表" -> SectionCard(title = "科学常数表（共 ${com.jisuanyusuiji.toolbox.tools.knowledge.ScienceConstants.all.size} 条）") {
+                Text(
+                    "提示：完整带搜索的常量表在【学习查询 → 科学常量表】里。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                com.jisuanyusuiji.toolbox.tools.knowledge.ScienceConstants.all
+                    .groupBy { it.group }
+                    .forEach { (groupName, list) ->
+                        Text(
+                            groupName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+                        )
+                        list.forEach { c ->
+                            InfoRow("${c.name}（${c.symbol}）", "${c.value} ${c.unit}")
+                        }
+                    }
             }
             "电子表格" -> SpreadsheetSection()
             "单位换算" -> UnitConversionSection()
             "向量" -> SectionCard(title = "二维/三维向量") {
-                LabeledField(p1, { p1 = it }, "向量 A（如 1,2,3）")
-                LabeledField(p2, { p2 = it }, "向量 B（如 4,5,6）")
+                LabeledField(p1, { p1 = it }, "向量 A（可写 1,2,3、(1,2,3)、1 2 3）")
+                LabeledField(p2, { p2 = it }, "向量 B（如 4,5,6；只算 |A| / 单位向量时可留空）")
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "支持逗号、空格、括号、负号与小数，例如 A = (1, -2.5, 3)；直接点“全部结果”一次算出所有量。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(8.dp))
-                listOf("A + B", "A − B", "点积 A·B", "模长 |A|", "单位向量 A/|A|", "叉积 A×B", "夹角").forEach { op ->
+                listOf("全部结果", "A + B", "A − B", "点积 A·B", "模长 |A|", "单位向量 A/|A|", "叉积 A×B", "夹角").forEach { op ->
                     Button(onClick = {
                         error = ""
                         try { calcVector(op) } catch (e: Exception) { error = e.message ?: "错误" }
                     }, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text(op) }
                 }
             }
-            "二次不等式" -> SectionCard(title = "一元二次不等式 ax²+bx+c") {
-                LabeledField(p1, { p1 = it }, "a", keyboardType = KeyboardType.Decimal)
-                LabeledField(p2, { p2 = it }, "b", keyboardType = KeyboardType.Decimal)
-                LabeledField(p3, { p3 = it }, "c", keyboardType = KeyboardType.Decimal)
+            "二次不等式" -> SectionCard(title = "一元二次不等式 ax²+bx+c（直接给解集）") {
+                LabeledField(p1, { p1 = it }, "a（二次项系数）", keyboardType = KeyboardType.Decimal)
+                LabeledField(p2, { p2 = it }, "b（一次项系数）", keyboardType = KeyboardType.Decimal)
+                LabeledField(p3, { p3 = it }, "c（常数项）", keyboardType = KeyboardType.Decimal)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "点下面的不等号即可直接得到解集（自动判断 Δ 与开口方向，a=0 时按一次不等式处理）。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(8.dp))
                 listOf("ax²+bx+c > 0", "ax²+bx+c < 0", "ax²+bx+c ≥ 0", "ax²+bx+c ≤ 0").forEach { op ->
                     Button(onClick = {
@@ -444,7 +518,7 @@ private fun SpreadsheetSection() {
                     val results = mutableListOf<Pair<String, String>>()
                     for (refKey in cells.keys) {
                         val v = evalCell(refKey, cache, mutableSetOf())
-                        if (v != null) results.add(refKey to "%.6f".format(v).trimEnd('0').trimEnd('.', ','))
+                        if (v != null) results.add(refKey to fmtNum(v))
                     }
                     computed = results.sortedBy { it.first }
                 } catch (e: Exception) {
@@ -488,7 +562,7 @@ private fun UnitConversionSection() {
                 if (v == null) { error = "数值无效"; return@Button }
                 val base = v * group.units[fromIndex].second
                 val out = base / group.units[toIndex].second
-                output = "%.8f".format(out).trimEnd('0').trimEnd('.')
+                output = fmtNum(out)
             }, modifier = Modifier.fillMaxWidth()) { Text("换算") }
         }
         if (output.isNotBlank()) {
@@ -518,11 +592,11 @@ private fun VariableStoreSection() {
             Button(onClick = {
                 output = try {
                     val v = GraphParser(exprText) { name -> vars[name.uppercase()] ?: vars[name] }.parse()
-                    "%.8f".format(v)
+                    fmtNum(v)
                 } catch (e: Exception) { "错误：${e.message}" }
             }, modifier = Modifier.fillMaxWidth()) { Text("计算") }
             Spacer(Modifier.height(8.dp))
-            vars.forEach { (k, v) -> InfoRow("$k =", "%.6f".format(v)) }
+            vars.forEach { (k, v) -> InfoRow("$k =", fmtNum(v)) }
             if (output.isNotBlank()) Text("结果：$output", fontWeight = FontWeight.Bold)
             Text("提示：变量只保存在本页面，退出后清空。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }

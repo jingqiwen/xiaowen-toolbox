@@ -26,7 +26,12 @@ object ComplexCalc {
     fun evaluate(input: String): Result {
         if (input.isBlank()) return Result(error = "请输入复数表达式，如 (1+2i)*(3-4i)")
         return try {
-            Result(value = Parser(input.replace(" ", "")).parse())
+            val normalized = input.replace(" ", "")
+                .replace("π", "pi")
+                .replace("×", "*")
+                .replace("÷", "/")
+                .replace("−", "-")
+            Result(value = Parser(normalized).parse())
         } catch (e: Exception) {
             Result(error = e.message ?: "表达式格式错误")
         }
@@ -73,10 +78,14 @@ object ComplexCalc {
         private fun term(): Complex {
             var v = unary()
             while (true) {
-                when (peek()) {
+                when (val c = peek()) {
                     '*' -> { pos++; v *= unary() }
                     '/' -> { pos++; v /= unary() }
-                    else -> return v
+                    // 隐式乘法：(1+i)(1-i)、2(3+4i)、2pi、2i
+                    '(' -> v *= unary()
+                    else -> {
+                        if (c != null && (c.isLetter() || c.isDigit())) v *= unary() else return v
+                    }
                 }
             }
         }
@@ -99,6 +108,16 @@ object ComplexCalc {
             if (peek() == 'i') {
                 pos++
                 return Complex(0.0, 1.0)
+            }
+            if (peek()?.isLetter() == true) {
+                val start = pos
+                while (pos < s.length && s[pos].isLetter()) pos++
+                return when (val name = s.substring(start, pos)) {
+                    "pi" -> Complex(Math.PI, 0.0)
+                    "e" -> Complex(Math.E, 0.0)
+                    "i" -> Complex(0.0, 1.0)
+                    else -> fail("未知常量：$name（可用 pi、π、e、i）")
+                }
             }
             if (peek() == '.') return number()
             if (peek() == '-') { pos++; return -primary() }

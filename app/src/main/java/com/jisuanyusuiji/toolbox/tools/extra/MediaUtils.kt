@@ -62,11 +62,15 @@ fun decodeImage(context: Context, uri: Uri, maxSize: Int = 4096): Bitmap? = try 
 data class SavedMedia(val message: String, val uri: Uri?, val file: File?, val mimeType: String)
 
 fun saveMedia(context: Context, bytes: ByteArray, mimeType: String, displayName: String): SavedMedia {
+    val isAudio = mimeType.startsWith("audio/")
+    val isVideo = mimeType.startsWith("video/")
+    val isImage = mimeType.startsWith("image/")
     val subDir = when {
-        mimeType.contains("pdf") -> Environment.DIRECTORY_DOCUMENTS
-        mimeType.startsWith("audio") -> Environment.DIRECTORY_MUSIC
-        mimeType.startsWith("video") -> Environment.DIRECTORY_MOVIES
-        else -> Environment.DIRECTORY_PICTURES
+        isAudio -> Environment.DIRECTORY_MUSIC
+        isVideo -> Environment.DIRECTORY_MOVIES
+        isImage -> Environment.DIRECTORY_PICTURES
+        // PDF、PPT、Word、压缩包等统一放 Documents，走 Files 集合，避免 MIME 与集合不匹配
+        else -> Environment.DIRECTORY_DOCUMENTS
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
@@ -75,10 +79,10 @@ fun saveMedia(context: Context, bytes: ByteArray, mimeType: String, displayName:
             put(MediaStore.MediaColumns.RELATIVE_PATH, "$subDir/Toolbox")
         }
         val collection = when {
-            mimeType.contains("pdf") -> MediaStore.Files.getContentUri("external")
-            mimeType.startsWith("audio") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            mimeType.startsWith("video") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            isAudio -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            isImage -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            else -> MediaStore.Files.getContentUri("external")
         }
         val uri = context.contentResolver.insert(collection, values)
         return if (uri == null) {
@@ -184,13 +188,16 @@ fun saveBitmapToGallery(
     displayName: String
 ): String = saveBitmapMedia(context, bitmap, mimeType, format, quality, displayName).message
 
-/** 保存字节（如 PDF）到相册/Download 或应用目录。 */
+/** 保存字节（如 PDF、PPTX）到系统文件目录或应用目录。 */
 fun saveBytesToGallery(context: Context, bytes: ByteArray, mimeType: String, displayName: String): String {
+    val isAudio = mimeType.startsWith("audio/")
+    val isVideo = mimeType.startsWith("video/")
+    val isImage = mimeType.startsWith("image/")
     val subDir = when {
-        mimeType.contains("pdf") -> Environment.DIRECTORY_DOCUMENTS
-        mimeType.startsWith("audio") -> Environment.DIRECTORY_MUSIC
-        mimeType.startsWith("video") -> Environment.DIRECTORY_MOVIES
-        else -> Environment.DIRECTORY_PICTURES
+        isAudio -> Environment.DIRECTORY_MUSIC
+        isVideo -> Environment.DIRECTORY_MOVIES
+        isImage -> Environment.DIRECTORY_PICTURES
+        else -> Environment.DIRECTORY_DOCUMENTS
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
@@ -199,10 +206,10 @@ fun saveBytesToGallery(context: Context, bytes: ByteArray, mimeType: String, dis
             put(MediaStore.MediaColumns.RELATIVE_PATH, "$subDir/Toolbox")
         }
         val collection = when {
-            mimeType.contains("pdf") -> MediaStore.Files.getContentUri("external")
-            mimeType.startsWith("audio") -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-            mimeType.startsWith("video") -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            isAudio -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            isVideo -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            isImage -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            else -> MediaStore.Files.getContentUri("external")
         }
         val uri = context.contentResolver.insert(collection, values)
             ?: return "保存失败：无法创建媒体文件"

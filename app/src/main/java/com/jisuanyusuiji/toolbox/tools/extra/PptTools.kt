@@ -7,7 +7,6 @@ import android.net.Uri
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.util.Xml
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -36,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
-import org.xmlpull.v1.XmlPullParser
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -60,12 +58,20 @@ fun PptToImagesTool() {
 
     fun convert() {
         val u = uri ?: run { error = "请先选择 .pptx 文件"; return }
-        error = ""; message = ""; busy = true; saved = null
+        error = ""; message = ""; busy = true; saved = null; preview = null
         try {
-            val slides = parsePptxSlides(context, u)
-            if (slides.isEmpty()) { error = "未读取到幻灯片内容"; busy = false; return }
+            val parsed = parsePptxSlides(context, u)
+            if (parsed == null) {
+                error = "无法读取该文件：不是有效的 .pptx（Zip）格式。旧版 .ppt 请先用 PowerPoint / WPS 另存为 .pptx"
+                return
+            }
+            val (slides, aspect) = parsed
+            if (slides.isEmpty()) {
+                error = "没有在文件里找到幻灯片内容（ppt/slides/slideN.xml）"
+                return
+            }
             val width = resolution
-            val height = width * 9 / 16
+            val height = (width / aspect).toInt().coerceIn(360, 4000)
             val zipBytes = ByteArrayOutputStream()
             val zip = ZipOutputStream(zipBytes)
             slides.forEachIndexed { index, lines ->
@@ -80,9 +86,10 @@ fun PptToImagesTool() {
             saved = saveMedia(context, zipBytes.toByteArray(), "application/zip", "PPT_IMAGES_${System.currentTimeMillis()}.zip")
             message = "已转换 ${slides.size} 页为 PNG，并已打包为 ZIP（${width}×${height}）"
         } catch (e: Exception) {
-            error = "转换失败：${e.message}"
+            error = "转换失败：${e.message ?: "文件格式不支持"}"
+        } finally {
+            busy = false
         }
-        busy = false
     }
 
     Column(
@@ -120,43 +127,79 @@ fun PptToImagesTool() {
     }
 }
 
-private fun parsePptxSlides(context: android.content.Context, uri: Uri): List<List<String>> {
+/** 读取 .pptx：返回每页文字 + 页面宽高比。无法解析（例如旧版 .ppt）时返回 null。 */
+private fun parsePptxSlides(context: android.content.Context, uri: Uri): Pair<List<List<String>>, Float>? {
     val slides = sortedMapOf<Int, List<String>>()
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        val zip = ZipInputStream(input)
-        var entry = zip.nextEntry
-        while (entry != null) {
-            val name = entry.name
-            val match = Regex("ppt/slides/slide(\\d+)\\.xml").find(name)
-            if (match != null) {
-                val parser = Xml.newPullParser()
-                parser.setInput(zip, "UTF-8")
-                var event = parser.eventType
-                val lines = mutableListOf<String>()
-                val current = StringBuilder()
-                while (event != XmlPullParser.END_DOCUMENT) {
-                    when (event) {
-                        XmlPullParser.START_TAG -> if (parser.name == "t") current.append(parser.nextText())
-                        XmlPullParser.END_TAG -> if (parser.name == "p") {
-                            if (current.isNotBlank()) lines.add(current.toString().trim())
-                            current.clear()
+    var aspect = 16f / 9f
+    var isZip = false
+    try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            ZipInputStream(input).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    isZip = true
+                    val name = entry.name.replace('\\', '/')
+                    when {
+                        name == "ppt/presentation.xml" -> {
+                            val xml = String(zip.readBytes(), Charsets.UTF_8)
+                            val m = Regex("<p:sldSz[^>]*cx=\"(\\d+)\"[^>]*cy=\"(\\d+)\"").find(xml)
+                            if (m != null) {
+                                val cx = m.groupValues[1].toDoubleOrNull() ?: 0.0
+                                val cy = m.groupValues[2].toDoubleOrNull() ?: 0.0
+                                if (cx > 0 && cy > 0) aspect = (cx / cy).toFloat()
+                            }
+                        }
+                        Regex("ppt/slides/slide(\\d+)\\.xml").containsMatchIn(name) -> {
+                            val idx = Regex("slide(\\d+)\\.xml").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                            if (idx > 0) {
+                                val xml = String(zip.readBytes(), Charsets.UTF_8)
+                                slides[idx] = extractSlideLines(xml)
+                            }
                         }
                     }
-                    event = parser.next()
+                    zip.closeEntry()
+                    entry = zip.nextEntry
                 }
-                slides[match.groupValues[1].toInt()] = lines
             }
-            zip.closeEntry()
-            entry = zip.nextEntry
         }
+    } catch (_: Exception) {
+        return null
     }
-    return slides.values.toList()
+    if (!isZip) return null
+    return slides.values.toList() to aspect
+}
+
+private fun extractSlideLines(xml: String): List<String> {
+    fun unescape(s: String) = s
+        .replace("&lt;", "<").replace("&gt;", ">")
+        .replace("&quot;", "\"").replace("&apos;", "'")
+        .replace("&amp;", "&")
+    val lines = mutableListOf<String>()
+    val paraRegex = Regex("<a:p(?:\\s[^>]*)?>.*?</a:p>", RegexOption.DOT_MATCHES_ALL)
+    val textRegex = Regex("<a:t(?:\\s[^>]*)?>(.*?)</a:t>", RegexOption.DOT_MATCHES_ALL)
+    val chunks = paraRegex.findAll(xml).map { it.value }.toList().ifEmpty { listOf(xml) }
+    chunks.forEach { chunk ->
+        val sb = StringBuilder()
+        textRegex.findAll(chunk).forEach { m -> sb.append(unescape(m.groupValues[1])) }
+        val t = sb.toString().trim()
+        if (t.isNotEmpty()) lines.add(t)
+    }
+    return lines
 }
 
 private fun renderSlide(lines: List<String>, width: Int, height: Int): Bitmap {
     val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     canvas.drawColor(android.graphics.Color.WHITE)
+    if (lines.isEmpty()) {
+        val paint = Paint().apply {
+            isAntiAlias = true
+            color = android.graphics.Color.GRAY
+            textSize = 42f
+        }
+        canvas.drawText("（本页没有可提取的文字，可能是图片 / 图表 / SmartArt）", 60f, height / 2f, paint)
+        return bmp
+    }
     var y = 60f
     lines.forEachIndexed { index, line ->
         val paint = TextPaint().apply {

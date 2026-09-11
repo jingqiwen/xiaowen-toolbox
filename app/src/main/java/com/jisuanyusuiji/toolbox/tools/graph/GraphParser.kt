@@ -5,13 +5,27 @@ import kotlin.math.pow
 /**
  * 本地函数表达式解析器，支持变量和常用数学函数。
  * 变量通过 variables 回调获取（x、y、t、theta、a、b、c、d 等）。
+ * 兼容隐式乘法（2x、3sinx、2(x+1)）与省略括号写法（sinx = sin(x)、lnx = ln(x)）。
  */
 class GraphParser(
     private val src: String,
     private val variables: (String) -> Double?
 ) {
     private val s = src.lowercase()
+        .replace("π", "pi")
+        .replace("−", "-")
+        .replace("×", "*")
+        .replace("÷", "/")
     private var pos = 0
+
+    private companion object {
+        /** 可以“省略括号”使用的单参数函数（sinx、lnx、tan2x ...） */
+        val UNARY_FUNCTIONS = listOf(
+            "asin", "acos", "atan", "sinh", "cosh", "tanh",
+            "sqrt", "cbrt", "floor", "ceil", "round",
+            "sin", "cos", "tan", "log2", "log", "ln", "abs", "exp", "sign"
+        )
+    }
 
     fun parse(): Double {
         val v = expression()
@@ -36,7 +50,7 @@ class GraphParser(
         var v = power()
         while (true) {
             skipSpaces()
-            when (peek()) {
+            when (val c = peek()) {
                 '*' -> { pos++; v *= power() }
                 '/' -> {
                     pos++
@@ -44,7 +58,12 @@ class GraphParser(
                     if (d == 0.0) throw IllegalArgumentException("除数不能为 0")
                     v /= d
                 }
-                else -> return v
+                // 隐式乘法：2x、3sinx、2(x+1)、(x+1)(x-1)
+                '(' -> v *= power()
+                else -> {
+                    if (c != null && (c.isLetter() || c.isDigit() || c == '.')) v *= power()
+                    else return v
+                }
             }
         }
     }
@@ -140,7 +159,18 @@ class GraphParser(
             "pi" -> Math.PI
             "e" -> Math.E
             "inf" -> Double.POSITIVE_INFINITY
-            else -> variables(name) ?: throw IllegalArgumentException("未知变量：$name")
+            else -> variables(name) ?: run {
+                // 兼容 sinx、lnx、tan2x 等省略括号写法
+                val fn = UNARY_FUNCTIONS
+                    .filter { name.startsWith(it) && name.length > it.length }
+                    .maxByOrNull { it.length }
+                if (fn != null) {
+                    pos = start + fn.length
+                    call(fn, listOf(term()))
+                } else {
+                    throw IllegalArgumentException("未知变量或函数：$name（函数请写成 sin(x)，变量可用 x、y、t、a、b、c、d）")
+                }
+            }
         }
     }
 

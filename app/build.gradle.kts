@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,8 +15,8 @@ android {
         applicationId = "com.jisuanyusuiji.toolbox"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 13
+        versionName = "0.8.0"
     }
 
     signingConfigs {
@@ -26,6 +28,21 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // release 签名：读取本机 release-signing.properties（已被 .gitignore 忽略）。
+        // 没有该文件时自动跳过，assembleDebug 不受影响。
+        val releaseProps = Properties().apply {
+            val f = rootProject.file("release-signing.properties")
+            if (f.exists()) f.inputStream().use { load(it) }
+        }
+        val releaseStore = rootProject.file(releaseProps.getProperty("storeFile") ?: "release.keystore")
+        if (releaseStore.exists()) {
+            create("releaseLocal") {
+                storeFile = releaseStore
+                storePassword = releaseProps.getProperty("storePassword") ?: ""
+                keyAlias = releaseProps.getProperty("keyAlias") ?: ""
+                keyPassword = releaseProps.getProperty("keyPassword") ?: ""
+            }
+        }
     }
 
     buildTypes {
@@ -34,6 +51,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (rootProject.file("release.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("releaseLocal")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

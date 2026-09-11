@@ -123,19 +123,29 @@ class GifEncoder(private val width: Int, private val height: Int) {
             out.write((c shr 8) and 0xFF)
             out.write(c and 0xFF)
         }
+        // Netscape 2.0 循环扩展：无限循环播放
+        out.write(0x21); out.write(0xFF); out.write(11)
+        out.write("NETSCAPE2.0".toByteArray(Charsets.US_ASCII))
+        out.write(3); out.write(1)
+        writeShort(0)
+        out.write(0)
         delay = 0
     }
 
     fun addFrame(bitmap: Bitmap, delayCs: Int) {
+        // 统一缩放到编码器尺寸，避免尺寸不一致导致的黑边/黑块或越界
+        val src = if (bitmap.width == width && bitmap.height == height) bitmap
+        else Bitmap.createScaledBitmap(bitmap, width, height, true)
         val indices = ByteArray(width * height)
         val px = IntArray(width * height)
-        bitmap.getPixels(px, 0, width, 0, 0, width, height)
+        src.getPixels(px, 0, width, 0, 0, width, height)
         for (i in px.indices) {
             val r = ((px[i] shr 16) and 0xFF) shr 5
             val g = ((px[i] shr 8) and 0xFF) shr 5
             val b = (px[i] and 0xFF) shr 6
             indices[i] = ((r shl 5) or (g shl 2) or b).toByte()
         }
+        if (src !== bitmap) src.recycle()
         // GCE
         out.write(0x21); out.write(0xF9); out.write(4)
         out.write(0)
@@ -286,20 +296,30 @@ fun VideoToGifTool() {
                     retriever.setDataSource(context, u)
                     val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
                     if (durationMs <= 0) { error = "无法读取视频时长"; return@withContext }
-                    val encoder = GifEncoder(width, width)
-                    val delay = (100 / fps).coerceAtLeast(1)
+                    var srcW = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                    var srcH = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                    if (rotation == 90 || rotation == 270) { val tmp = srcW; srcW = srcH; srcH = tmp }
+                    if (srcW <= 0 || srcH <= 0) {
+                        retriever.getFrameAtTime(0)?.let { srcW = it.width; srcH = it.height }
+                    }
+                    val targetH = if (srcW > 0 && srcH > 0) {
+                        (width.toLong() * srcH / srcW).toInt().coerceIn(16, 2400)
+                    } else width
+                    val encoder = GifEncoder(width, targetH)
+                    val delay = (100 / fps).coerceAtLeast(2) // GIF 最小延时约 2/100 秒，避免部分播放器把 0 当作 10
                     for (i in 0 until frames) {
                         val t = durationMs * (i + 1) / (frames + 1)
                         val frame = retriever.getFrameAtTime(t * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
                             ?: continue
-                        val scale = width.toFloat() / frame.width
-                        val scaled = Bitmap.createScaledBitmap(frame, width, (frame.height * scale).toInt().coerceAtLeast(1), true)
+                        val scaled = Bitmap.createScaledBitmap(frame, width, targetH, true)
                         encoder.addFrame(scaled, delay)
+                        if (scaled !== frame) scaled.recycle()
                     }
                     retriever.release()
                     val bytes = encoder.finish()
                     saved = saveMedia(context, bytes, "image/gif", "GIF_${System.currentTimeMillis()}.gif")
-                    message = "GIF 已生成"
+                    message = "GIF 已生成（${width}×${targetH}，${frames} 帧，${fps} fps，循环播放）"
                 } catch (e: Exception) {
                     error = "转换失败：${e.message}"
                 }
@@ -332,7 +352,7 @@ fun VideoToGifTool() {
                 saved?.let { MediaResultActions(it) }
             }
         }
-        Text("说明：按时间均匀抽取帧；画面为方形（按宽度等比缩放）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text("说明：按时间均匀抽取帧，保持原视频宽高比，输出动图会无限循环播放。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }
 
@@ -345,6 +365,11 @@ fun VideoEditTool() {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var speed by remember { mutableStateOf(1.0f) }
     var mode by remember { mutableStateOf("转 MP4 / 压缩") }
+    var codec by remember { mutableStateOf("H.264（兼容性最好）") }
+    var quality by remember { mutableStateOf("原始分辨率") }
+    var frameRate by remember { mutableStateOf(0) }
+    var mute by remember { mutableStateOf(false) }
+    var audioOnly by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf<SavedMedia?>(null) }
     var error by remember { mutableStateOf("") }
@@ -356,16 +381,18 @@ fun VideoEditTool() {
         error = ""
         message = ""
         busy = true
-        val outFile = File(context.cacheDir, "edit_${System.currentTimeMillis()}.mp4")
+        val extension = if (audioOnly) "m4a" else "mp4"
+        val mime = if (audioOnly) "audio/mp4" else "video/mp4"
+        val outFile = File(context.cacheDir, "edit_${System.currentTimeMillis()}.$extension")
         val t = Transformer.Builder(context)
-            .setVideoMimeType(MimeTypes.VIDEO_H264)
+            .setVideoMimeType(if (codec.startsWith("H.265")) MimeTypes.VIDEO_H265 else MimeTypes.VIDEO_H264)
             .setAudioMimeType(MimeTypes.AUDIO_AAC)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     busy = false
                     val bytes = outFile.readBytes()
-                    saved = saveMedia(context, bytes, "video/mp4", "VIDEO_${System.currentTimeMillis()}.mp4")
-                    message = "视频处理完成"
+                    saved = saveMedia(context, bytes, mime, "VIDEO_${System.currentTimeMillis()}.$extension")
+                    message = if (audioOnly) "已导出为音频（M4A / AAC）" else "视频处理完成"
                     transformer = null
                 }
 
@@ -377,9 +404,35 @@ fun VideoEditTool() {
             })
             .build()
         transformer = t
-        val effects = if (speed == 1.0f) Effects.EMPTY
-        else Effects(listOf(), listOf(SpeedChangeEffect(speed)))
-        val item = EditedMediaItem.Builder(MediaItem.fromUri(u)).setEffects(effects).build()
+        val videoEffects = mutableListOf<androidx.media3.common.Effect>()
+        if (speed != 1.0f) videoEffects += SpeedChangeEffect(speed)
+        if (!audioOnly && quality != "原始分辨率") {
+            val targetH = when (quality) {
+                "1080p" -> 1080
+                "720p" -> 720
+                else -> 480
+            }
+            val mmr = MediaMetadataRetriever()
+            try {
+                mmr.setDataSource(context, u)
+                val srcH = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                if (srcH > targetH) {
+                    val scale = targetH.toFloat() / srcH
+                    videoEffects += androidx.media3.effect.ScaleAndRotateTransformation.Builder()
+                        .setScale(scale, scale)
+                        .build()
+                }
+            } catch (_: Exception) {
+            } finally {
+                try { mmr.release() } catch (_: Exception) {}
+            }
+        }
+        val item = EditedMediaItem.Builder(MediaItem.fromUri(u)).apply {
+            setEffects(Effects(listOf(), videoEffects))
+            if (audioOnly) setRemoveVideo(true)
+            if (mute && !audioOnly) setRemoveAudio(true)
+            if (!audioOnly && frameRate > 0) setFrameRate(frameRate)
+        }.build()
         t.start(item, outFile.absolutePath)
     }
 
@@ -405,6 +458,45 @@ fun VideoEditTool() {
                     { "${it}x" }
                 )
             }
+            Spacer(Modifier.height(10.dp))
+            Text("输出类型", style = MaterialTheme.typography.bodyMedium)
+            ChoiceChips(
+                listOf(false, true),
+                audioOnly,
+                { audioOnly = it },
+                { if (it) "仅音频 M4A" else "视频 MP4" }
+            )
+            if (!audioOnly) {
+                Spacer(Modifier.height(8.dp))
+                Text("编码", style = MaterialTheme.typography.bodyMedium)
+                ChoiceChips(
+                    listOf("H.264（兼容性最好）", "H.265（体积更小）"),
+                    codec,
+                    { codec = it },
+                    { it }
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("分辨率", style = MaterialTheme.typography.bodyMedium)
+                ChoiceChips(
+                    listOf("原始分辨率", "1080p", "720p", "480p"),
+                    quality,
+                    { quality = it },
+                    { it }
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("帧率", style = MaterialTheme.typography.bodyMedium)
+                ChoiceChips(
+                    listOf(0, 24, 30, 60),
+                    frameRate,
+                    { frameRate = it },
+                    { if (it == 0) "保持原始" else "$it fps" }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("静音（不要声音）", modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = mute, onCheckedChange = { mute = it }, enabled = !audioOnly)
+            }
             Spacer(Modifier.height(12.dp))
             Button(onClick = { run() }, enabled = uri != null && !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (busy) "处理中…" else "开始处理")
@@ -419,8 +511,10 @@ fun VideoEditTool() {
         }
         SectionCard(title = "支持范围说明") {
             Text(
-                "输出：MP4（H.264 + AAC）。\n输入：MP4、MOV、TS、MKV、FLV 等常见格式；AVI、特殊编码的 MKV/FLV 可能不支持。\n" +
-                    "“压缩”为重新编码，体积通常减小；变速会保持音调。\n倒放目前系统 API 不支持，需要 FFmpeg 才能实现。",
+                "输出：MP4（H.264/H.265 + AAC）或仅音频 M4A（AAC）。\n" +
+                    "输入：MP4、MOV、TS、MKV、FLV 等常见格式；AVI、特殊编码的 MKV/FLV 可能不支持。\n" +
+                    "“压缩”为重新编码，体积通常减小；变速会保持音调；H.265 需要手机硬件支持，不支持时自动回退 H.264。\n" +
+                    "倒放目前系统 API 不支持，需要 FFmpeg 才能实现。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

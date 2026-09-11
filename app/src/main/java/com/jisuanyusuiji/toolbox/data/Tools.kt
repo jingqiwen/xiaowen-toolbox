@@ -59,6 +59,7 @@ import com.jisuanyusuiji.toolbox.tools.graph.ResearchPlotTool
 import com.jisuanyusuiji.toolbox.tools.graph.Surface3DTool
 import com.jisuanyusuiji.toolbox.tools.probability.ProbabilityTool
 import com.jisuanyusuiji.toolbox.tools.vocab.VocabTool
+import com.jisuanyusuiji.toolbox.tools.knowledge.ConstantsTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.ShortcutTool
 import com.jisuanyusuiji.toolbox.tools.random.CoinFlipTool
@@ -175,6 +176,7 @@ object ToolRegistry {
 
         // ---------- 知识查询 ----------
         ToolDef("shortcut_keys", "电脑快捷键查询", "Windows / macOS 常用与进阶快捷键", "⌨️", ToolCategory.KNOWLEDGE) { ShortcutTool() },
+        ToolDef("constants", "科学常量表", "数学、物理、电磁、量子、天文常用常数，可搜索分类", "🔬", ToolCategory.KNOWLEDGE) { ConstantsTool() },
         ToolDef("formula_query", "数学物理公式查询", "小学到大学教材公式，含高数/线代/概率/复变/大物，可按教材章节筛选", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
         ToolDef("probability", "概率论公式与分布", "概率公式大全 + 正态/二项/泊松等分布计算", "🎲", ToolCategory.KNOWLEDGE) { ProbabilityTool() },
         ToolDef("vocab", "考研背单词", "词库搜索、卡片背诵、自定义词库导入", "📚", ToolCategory.KNOWLEDGE) { VocabTool() },

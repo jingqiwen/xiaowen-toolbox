@@ -18,8 +18,8 @@ import kotlin.math.tanh
 
 /**
  * 本地安全表达式求值器。
- * 支持：四则运算、括号、百分号、幂、阶乘、常见函数与常量 pi/e。
- * 不支持隐式乘法（如 2(3+1) 请写成 2*(3+1)）。
+ * 支持：四则运算、括号（可自动补齐）、百分号、幂、阶乘、常见函数与常量 pi/e/π，
+ * 支持隐式乘法（2(3+1)、9π、3sin(2)、2pi 等）。
  */
 object CalcExpr {
 
@@ -30,12 +30,17 @@ object CalcExpr {
     fun evaluate(input: String, degrees: Boolean = false): EvalResult {
         if (input.isBlank()) return EvalResult(error = "请输入表达式")
         return try {
-            val normalized = input
+            var normalized = input
                 .replace("×", "*")
                 .replace("÷", "/")
                 .replace("−", "-")
                 .replace("π", "pi")
+                .replace("Π", "pi")
                 .replace("％", "%")
+            // 自动补齐缺少的右括号：tan(2pi → tan(2pi)
+            val open = normalized.count { it == '(' }
+            val close = normalized.count { it == ')' }
+            if (open > close) normalized += ")".repeat(open - close)
             EvalResult(value = Parser(normalized, degrees).parse())
         } catch (e: Exception) {
             EvalResult(error = e.message ?: "表达式格式错误")
@@ -69,7 +74,7 @@ object CalcExpr {
             var value = power()
             while (true) {
                 skipSpaces()
-                when (peek()) {
+                when (val c = peek()) {
                     '*' -> { pos++; value *= power() }
                     '/' -> {
                         pos++
@@ -77,7 +82,12 @@ object CalcExpr {
                         if (divisor == 0.0) fail("除数不能为 0")
                         value /= divisor
                     }
-                    else -> return value
+                    // 隐式乘法：9π、2pi、3sin(2)、2(3+1)、(1+2)(3+4)、(2)3 等
+                    '(' -> value *= power()
+                    else -> {
+                        if (c != null && (c.isLetter() || c.isDigit() || c == '.')) value *= power()
+                        else return value
+                    }
                 }
             }
         }
@@ -180,8 +190,9 @@ object CalcExpr {
             "sinh" -> sinh(x)
             "cosh" -> cosh(x)
             "tanh" -> tanh(x)
-            "log" -> if (x <= 0) fail("log 参数必须大于 0") else log10(x)
+            "log", "lg" -> if (x <= 0) fail("log 参数必须大于 0") else log10(x)
             "ln" -> if (x <= 0) fail("ln 参数必须大于 0") else ln(x)
+            "lb" -> if (x <= 0) fail("lb 参数必须大于 0") else ln(x) / ln(2.0)
             "sqrt" -> if (x < 0) fail("sqrt 参数不能为负数") else sqrt(x)
             "cbrt" -> Math.cbrt(x)
             "abs" -> abs(x)

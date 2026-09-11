@@ -117,8 +117,8 @@ fun UnitConverterTool() {
         }
         error = ""
         val base = toBase(category, fromUnit, value)
-        result = "${fmt(base)} ${category.units[0].name.split(" ").firstOrNull() ?: ""}\n" +
-            "= ${fmt(fromBase(category, toUnit, base))} ${toUnit.name}"
+        // 结果直接给出“输入值（从单位）= 换算值（到单位）”，不再用分类的第一个单位做中转显示
+        result = "${fmt(value)} ${fromUnit.name} = ${fmt(fromBase(category, toUnit, base))} ${toUnit.name}"
     }
 
     Column(

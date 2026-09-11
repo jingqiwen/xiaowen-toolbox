@@ -2,6 +2,7 @@ package com.jisuanyusuiji.toolbox.tools.calc
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,11 +19,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
+import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.LabeledField
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.abs
 
 private data class Fraction(val num: Long, val den: Long) {
@@ -36,32 +41,15 @@ private data class Fraction(val num: Long, val den: Long) {
 
 private fun gcd(a: Long, b: Long): Long = if (b == 0L) a else gcd(b, a % b)
 
-/** 支持 "3/4"、"7/2"、"1 2/3"（带分数）、"-5/8" 等格式。 */
-private fun parseFraction(text: String): Fraction? {
-    var s = text.trim().replace("，", " ")
-    if (s.isEmpty()) return null
-    var whole = 0L
-    val parts = s.split(Regex("\\s+"))
-    if (parts.size == 2) {
-        whole = parts[0].toLongOrNull() ?: return null
-        s = parts[1]
-    } else if (parts.size > 2) return null
-    val negative = s.startsWith("-")
-    if (negative) s = s.drop(1)
-    val fracParts = s.split("/")
-    val num: Long
-    val den: Long
-    if (fracParts.size == 1) {
-        num = fracParts[0].toLongOrNull() ?: return null
-        den = 1L
-    } else if (fracParts.size == 2) {
-        num = fracParts[0].toLongOrNull() ?: return null
-        den = fracParts[1].toLongOrNull() ?: return null
-        if (den == 0L) return null
-    } else return null
-    var n = if (whole >= 0) whole * den + num else -((-whole) * den + num)
-    if (negative) n = -n
-    return Fraction(n, den)
+/** 由“整数部分 + 分子 + 分母”组成分数；整数与分子至少填一个。 */
+private fun buildFraction(whole: String, num: String, den: String): Fraction? {
+    val d = den.trim().ifBlank { "1" }.toLongOrNull() ?: return null
+    if (d == 0L) return null
+    val w = whole.trim().ifBlank { "0" }.toLongOrNull() ?: return null
+    val n = num.trim().toLongOrNull() ?: return null
+    val sign = if (w < 0) -1L else 1L
+    val value = sign * (abs(w) * d + n)
+    return Fraction(value, d)
 }
 
 private fun mixedString(f: Fraction): String {
@@ -76,10 +64,30 @@ private fun mixedString(f: Fraction): String {
     }
 }
 
+/** 该分数是否能化成有限小数 */
+private fun terminating(f: Fraction): Boolean {
+    var d = f.reduced().den
+    while (d % 2L == 0L) d /= 2L
+    while (d % 5L == 0L) d /= 5L
+    return d == 1L
+}
+
+private fun decimalString(f: Fraction): String {
+    val r = f.reduced()
+    return BigDecimal(r.num)
+        .divide(BigDecimal(r.den), 12, RoundingMode.HALF_UP)
+        .stripTrailingZeros()
+        .toPlainString()
+}
+
 @Composable
 fun FractionTool() {
-    var f1 by remember { mutableStateOf("3/4") }
-    var f2 by remember { mutableStateOf("1/2") }
+    var w1 by remember { mutableStateOf("") }
+    var n1 by remember { mutableStateOf("3") }
+    var d1 by remember { mutableStateOf("4") }
+    var w2 by remember { mutableStateOf("") }
+    var n2 by remember { mutableStateOf("1") }
+    var d2 by remember { mutableStateOf("2") }
     var op by remember { mutableStateOf("＋") }
     var result by remember { mutableStateOf("") }
     var decimal by remember { mutableStateOf("") }
@@ -89,8 +97,8 @@ fun FractionTool() {
         error = ""
         result = ""
         decimal = ""
-        val a = parseFraction(f1) ?: run { error = "分数 1 格式错误（示例：3/4 或 1 2/3）"; return }
-        val b = parseFraction(f2) ?: run { error = "分数 2 格式错误（示例：3/4 或 1 2/3）"; return }
+        val a = buildFraction(w1, n1, d1) ?: run { error = "分数 1 填写有误：整数、分子需为整数，分母不能为 0"; return }
+        val b = buildFraction(w2, n2, d2) ?: run { error = "分数 2 填写有误：整数、分子需为整数，分母不能为 0"; return }
         val value = when (op) {
             "＋" -> Fraction(a.num * b.den + b.num * a.den, a.den * b.den)
             "−" -> Fraction(a.num * b.den - b.num * a.den, a.den * b.den)
@@ -101,28 +109,45 @@ fun FractionTool() {
             }
         }
         val r = value.reduced()
-        result = "假分数：${r.num}/${r.den}\n带分数：${mixedString(r)}"
-        decimal = "≈ ${r.num.toDouble() / r.den}"
+        result = "假分数：${r.num}/${r.den}\n" +
+            "带分数：${mixedString(r)}"
+        decimal = if (terminating(r)) "${decimalString(r)}" else "≈ ${decimalString(r)}"
     }
 
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        SectionCard(title = "分数四则运算（自动约分）") {
-            LabeledField(f1, { f1 = it }, "分数 1（如 3/4 或 1 2/3）")
-            Spacer(Modifier.height(8.dp))
-            ChoiceChips(listOf("＋", "−", "×", "÷"), op, { op = it }, { it })
-            Spacer(Modifier.height(8.dp))
-            LabeledField(f2, { f2 = it }, "分数 2（如 5/6）")
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = { calc() }, modifier = Modifier.fillMaxWidth()) { Text("计算") }
+        SectionCard(title = "分数 1（可不填整数；只填分子时表示整数）") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LabeledField(w1, { w1 = it }, "整数部分", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                LabeledField(n1, { n1 = it }, "分子", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                LabeledField(d1, { d1 = it }, "分母", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+            }
         }
+        SectionCard(title = "运算") {
+            ChoiceChips(listOf("＋", "−", "×", "÷"), op, { op = it }, { it })
+        }
+        SectionCard(title = "分数 2") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LabeledField(w2, { w2 = it }, "整数部分", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                LabeledField(n2, { n2 = it }, "分子", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+                LabeledField(d2, { d2 = it }, "分母", Modifier.weight(1f), keyboardType = KeyboardType.Number)
+            }
+        }
+        Button(onClick = { calc() }, modifier = Modifier.fillMaxWidth()) { Text("计算") }
         ErrorText(error)
         if (result.isNotBlank()) {
             SectionCard(title = "结果") {
                 Text(result, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(decimal, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "小数形式：$decimal",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.height(10.dp))
+                CopyButton("$result\n小数形式：$decimal")
             }
         }
     }

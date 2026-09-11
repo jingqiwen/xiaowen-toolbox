@@ -66,7 +66,13 @@ fun EquationTool() {
     var result by remember { mutableStateOf(listOf<String>()) }
     var error by remember { mutableStateOf("") }
 
-    fun d2(s: String) = s.trim().toDoubleOrNull()
+    // 系数支持表达式：π / pi / e、sqrt(2)、3/2、2^3 等
+    fun d2(s: String): Double? {
+        val t = s.trim()
+        if (t.isEmpty()) return null
+        val r = CalcExpr.evaluate(t)
+        return if (r.ok) r.value else null
+    }
 
     fun solve() {
         error = ""
@@ -168,10 +174,27 @@ fun EquationTool() {
                 val b22 = d2(b2) ?: run { error = "b₂ 无效"; return }
                 val c22 = d2(c2) ?: run { error = "c₂ 无效"; return }
                 val det = a1 * b22 - a22 * b1
-                if (det == 0.0) { error = "系数行列式为 0：方程组可能无解或有无穷多解"; return }
+                val eq1 = "${fmt2(a1)}x + ${fmt2(b1)}y = ${fmt2(c1)}"
+                val eq2 = "${fmt2(a22)}x + ${fmt2(b22)}y = ${fmt2(c22)}"
+                if (det == 0.0) {
+                    // 用系数与常数项的成比例关系判断“无解”还是“无穷多解”
+                    val consistent = (a1 * c22 - a22 * c1 == 0.0) && (b1 * c22 - b22 * c1 == 0.0) && (a1 * b22 - a22 * b1 == 0.0)
+                    result = listOf(
+                        "方程组：", eq1, eq2,
+                        if (consistent) "系数行列式为 0，且两方程相容 → 有无穷多组解（两直线重合）"
+                        else "系数行列式为 0，两方程矛盾 → 无解（两直线平行）"
+                    )
+                    return
+                }
                 val x = (c1 * b22 - c22 * b1) / det
                 val y = (a1 * c22 - a22 * c1) / det
-                result = listOf("利用克莱姆法则：", "x = ${fmt2(x)}", "y = ${fmt2(y)}")
+                result = listOf(
+                    "方程组：", eq1, eq2,
+                    "系数行列式 D = ${fmt2(det)} ≠ 0，有唯一解",
+                    "克莱姆法则：",
+                    "x = ${fmt2(x)}",
+                    "y = ${fmt2(y)}"
+                )
             }
             "三元一次方程组" -> {
                 val a1 = d2(a) ?: run { error = "a₁ 无效"; return }
@@ -246,17 +269,26 @@ fun EquationTool() {
                     LabeledField(b, { b = it }, "b（logₐx=b）", keyboardType = KeyboardType.Decimal)
                 }
                 "二元一次方程组" -> {
+                    Text("方程组：a₁x + b₁y = c₁，a₂x + b₂y = c₂", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(6.dp))
                     LabeledField(a, { a = it }, "a₁（x 的系数）", keyboardType = KeyboardType.Decimal)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     LabeledField(b, { b = it }, "b₁（y 的系数）", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(6.dp))
+                    LabeledField(c, { c = it }, "c₁（等号右边常数）", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(10.dp))
+                    LabeledField(a2, { a2 = it }, "a₂（x 的系数）", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(6.dp))
+                    LabeledField(b2, { b2 = it }, "b₂（y 的系数）", keyboardType = KeyboardType.Decimal)
+                    Spacer(Modifier.height(6.dp))
+                    LabeledField(c2, { c2 = it }, "c₂（等号右边常数）", keyboardType = KeyboardType.Decimal)
                     Spacer(Modifier.height(8.dp))
-                    LabeledField(c, { c = it }, "c₁（常数项）", keyboardType = KeyboardType.Decimal)
-                    Spacer(Modifier.height(8.dp))
-                    LabeledField(a2, { a2 = it }, "a₂", keyboardType = KeyboardType.Decimal)
-                    Spacer(Modifier.height(8.dp))
-                    LabeledField(b2, { b2 = it }, "b₂", keyboardType = KeyboardType.Decimal)
-                    Spacer(Modifier.height(8.dp))
-                    LabeledField(c2, { c2 = it }, "c₂", keyboardType = KeyboardType.Decimal)
+                    Text(
+                        "当前方程：\n${a.ifBlank { "a₁" }}x + ${b.ifBlank { "b₁" }}y = ${c.ifBlank { "c₁" }}\n" +
+                            "${a2.ifBlank { "a₂" }}x + ${b2.ifBlank { "b₂" }}y = ${c2.ifBlank { "c₂" }}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
                 "三元一次方程组" -> {
                     Text("方程 1：a₁x + b₁y + c₁z = d₁", style = MaterialTheme.typography.bodyMedium)
@@ -284,6 +316,12 @@ fun EquationTool() {
                     LabeledField(d, { d = it }, "d（常数项）", keyboardType = KeyboardType.Decimal)
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "系数可输入表达式：π、pi、e、sqrt(2)、2/3、2^3 等",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(12.dp))
             Button(onClick = { solve() }, modifier = Modifier.fillMaxWidth()) { Text("求解") }
         }

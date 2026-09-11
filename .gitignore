@@ -10,6 +10,10 @@ captures/
 *.aab
 .kotlin/
 
+# release 签名（仅本机保留，不提交）
+release.keystore
+release-signing.properties
+
 # 本机构建缓存（可随时删除，Android Studio 会自行重建）
 .gradle_test_home/
 .gradle_home_build/
