@@ -43,6 +43,18 @@ class FormulaLegendTest {
     }
 
     @Test
+    fun combinationInCalculus_isExplainedAsCombination() {
+        val item = FormulaItem(
+            "高等数学", "莱布尼茨公式",
+            "(uv)^(n)=Σ_(k=0)^n C(n,k)·u^(n-k)·v^(k)", "乘积的高阶导数",
+            level = "通用", chapter = "导数与微分"
+        )
+        val legend = FormulaLegend.of(item)
+        assertTrue(legend.contains("组合数"))
+        assertTrue(!legend.contains("积分常数"))
+    }
+
+    @Test
     fun scienceConstant_hasNoForcedLegend() {
         val item = FormulaItem("科学常数", "真空光速", "c = 299792458 m/s", "电磁波在真空中的传播速度")
         assertTrue(FormulaLegend.of(item).isEmpty())

@@ -98,6 +98,7 @@ object FormulaLegend {
         "牛顿-莱布尼茨公式" to "F(x)：f(x) 的一个原函数；a、b：积分下限、上限",
         "洛必达法则" to "f、g：两个可导函数；lim：极限符号；x→a 表示 x 趋近于 a",
         "泰勒公式" to "f(x)：被展开函数；x_0：展开点；n：展开阶数；ξ：拉格朗日余项中的中间点",
+        "莱布尼茨公式" to "u、v：两个可导函数；n：求导阶数；C(n,k)：组合数；k：求和序号（从 0 到 n）",
         "旋转体体积" to "V：旋转体体积；f(x)：母线函数；a、b：区间端点；π：圆周率",
         "古典概率" to "P(A)：事件 A 发生的概率；m：A 包含的基本事件数；n：基本事件总数",
         "条件概率" to "P(A|B)：在 B 发生的条件下 A 发生的概率；P(AB)：A、B 同时发生的概率",
@@ -282,7 +283,9 @@ object FormulaLegend {
             "Σ" to "Σ：求和符号",
             "Γ" to "Γ：伽马函数 / 空间曲线",
             "λ" to "λ：参数",
-            "μ" to "μ：参数 / 平均值"
+            "μ" to "μ：参数 / 平均值",
+            "k" to "k：序号 / 常数",
+            "t" to "t：参数"
         ),
         special = mapOf(
             "Δx" to "Δx：自变量的增量",
@@ -598,9 +601,15 @@ object FormulaLegend {
         ctx.special.forEach { (token, text) ->
             if (expr.contains(token)) parts[token] = text
         }
+        // C(n,m) / A(n,m) 优先解释成组合数、排列数，避免语境词典把 C 说成“积分常数”等
+        val hasCombo = Regex("[CＣ]\\s*[(（]").containsMatchIn(expr)
+        val hasPerm = Regex("[AＡ]\\s*[(（]").containsMatchIn(expr)
+        if (hasCombo) parts["C"] = "C(n,m)：组合数（从 n 个元素中取 m 个，不考虑顺序）"
+        if (hasPerm) parts["A"] = "A(n,m)：排列数（从 n 个元素中取 m 个，考虑顺序）"
         // 再按出现顺序放单个字母
         symbolsIn(expr).forEach { symbol ->
             if (parts.size >= 8) return@forEach
+            if ((symbol == "C" && hasCombo) || (symbol == "A" && hasPerm)) return@forEach
             val raw = ctx.symbols[symbol] ?: BASE[symbol] ?: return@forEach
             parts.putIfAbsent(symbol, normalize(symbol, raw))
         }
