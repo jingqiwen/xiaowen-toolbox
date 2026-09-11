@@ -64,49 +64,92 @@ internal data class ArgsCall(
  *  - C(n,m) / A(n,m) → 排列数、组合数（字母 + 上下标，不使用括号形式）
  *  - a/b            → 分式（上下结构）
  *  - 其它           → 普通文本
+ *
+ * 采用“先找出本层所有结构（分式 / 排列组合），去掉被包含的结构，再递归解析分子分母”的方式，
+ * 因此 sin((A+δ)/2)/sin(A/2) 这类“分子里还有分数”的公式也能正确得到外层大分数。
  */
-internal fun parseMathNodes(input: String): List<MathNode> {
-    val result = mutableListOf<MathNode>()
-    var textStart = 0
+internal fun parseMathNodes(input: String): List<MathNode> = parseBlock(input)
+
+private sealed interface Piece {
+    val start: Int
+    val end: Int
+}
+
+private data class FracPiece(override val start: Int, val slash: Int, override val end: Int) : Piece
+private data class CallPiece(
+    override val start: Int,
+    override val end: Int,
+    val letter: String,
+    val first: String,
+    val second: String
+) : Piece
+
+private fun parseBlock(s: String): List<MathNode> {
+    if (s.isEmpty()) return emptyList()
+    val pieces = mutableListOf<Piece>()
+
+    // 1) 所有可安全堆叠的分式
+    var slash = s.indexOf('/')
+    while (slash >= 0) {
+        val match = matchFraction(s, slash, 0)
+        if (match != null) pieces += FracPiece(match.numStart, slash, match.denEnd)
+        slash = s.indexOf('/', slash + 1)
+    }
+    // 2) 所有 A(n,m) / C(n,m) 调用
     var i = 0
-    while (i < input.length) {
-        // 1) 排列数 / 组合数
-        if ((input[i] == 'A' || input[i] == 'C') &&
-            i + 1 < input.length && (input[i + 1] == '(' || input[i + 1] == '（')
+    while (i < s.length) {
+        if ((s[i] == 'A' || s[i] == 'C') &&
+            i + 1 < s.length && (s[i + 1] == '(' || s[i + 1] == '（')
         ) {
-            val call = parseArgsCall(input, i)
+            val call = parseArgsCall(s, i)
             if (call != null) {
-                if (i > textStart) result += MathNode.Txt(input.substring(textStart, i))
-                val a = parseMathNodes(call.first)
-                val b = parseMathNodes(call.second)
-                result += if (call.letter == "C") {
-                    MathNode.Indexed("C", sub = a, sup = b)
-                } else {
-                    MathNode.Indexed("A", sub = a, sup = b)
-                }
+                pieces += CallPiece(i, call.end, call.letter, call.first, call.second)
                 i = call.end
-                textStart = i
-                continue
-            }
-        }
-        // 2) 分式
-        if (input[i] == '/' && i > 0) {
-            val match = matchFraction(input, i, textStart)
-            if (match != null) {
-                if (match.numStart > textStart) {
-                    result += MathNode.Txt(input.substring(textStart, match.numStart))
-                }
-                val num = parseMathNodes(input.substring(match.numStart, i).trim())
-                val den = parseMathNodes(input.substring(i + 1, match.denEnd).trim())
-                result += MathNode.Frac(num, den)
-                i = match.denEnd
-                textStart = match.denEnd
                 continue
             }
         }
         i++
     }
-    if (textStart < input.length) result += MathNode.Txt(input.substring(textStart))
+    // 3) 去掉“被别的结构包住”的内层结构，交给递归处理
+    val keep = BooleanArray(pieces.size) { true }
+    for (a in pieces.indices) {
+        for (b in pieces.indices) {
+            if (a == b) continue
+            val outer = pieces[b]
+            val inner = pieces[a]
+            if (outer.start <= inner.start && outer.end >= inner.end &&
+                (outer.start < inner.start || outer.end > inner.end)
+            ) {
+                keep[a] = false
+                break
+            }
+        }
+    }
+    val topLevel = pieces.filterIndexed { index, _ -> keep[index] }.sortedBy { it.start }
+    if (topLevel.isEmpty()) return listOf(MathNode.Txt(s))
+
+    val result = mutableListOf<MathNode>()
+    var pos = 0
+    topLevel.forEach { piece ->
+        if (piece.start < pos) return@forEach
+        if (piece.start > pos) result += MathNode.Txt(s.substring(pos, piece.start))
+        when (piece) {
+            is FracPiece -> {
+                val num = parseBlock(s.substring(piece.start, piece.slash).trim())
+                val den = parseBlock(s.substring(piece.slash + 1, piece.end).trim())
+                result += MathNode.Frac(num, den)
+            }
+            is CallPiece -> {
+                result += MathNode.Indexed(
+                    piece.letter,
+                    sub = parseBlock(piece.first),
+                    sup = parseBlock(piece.second)
+                )
+            }
+        }
+        pos = piece.end
+    }
+    if (pos < s.length) result += MathNode.Txt(s.substring(pos))
     return result.filterNot { it is MathNode.Txt && it.text.isEmpty() }
 }
 
@@ -215,19 +258,41 @@ internal fun scanDenominator(s: String, from: Int): DenScan? {
         val close = matchingClose(s, i) ?: return null
         return DenScan(close + 1, grouped = true)
     }
-    var end = i
-    while (end < s.length && isAtomChar(s[end])) end++
-    if (end == i) return null
+    var end = scanDenominatorAtom(s, i)
+    if (end <= i) return null
+    val firstAtom = s.substring(i, end)
+    // d/dx(f)、dy/dt(g) 里的 dx、dt 是微分算子，后面的括号不属于分母
+    val differential = firstAtom.length in 1..4 && firstAtom[0] == 'd' &&
+        firstAtom.all { it.isLetterOrDigit() || it == '^' }
 
-    // 继续吞并“以空格分隔的连乘原子”（如 log_c a），但遇到括号组/运算符就停
-    var j = skipSpaces(s, end)
-    while (j < s.length && isAtomChar(s[j])) {
-        var k = j
-        while (k < s.length && isAtomChar(s[k])) k++
-        end = k
-        j = skipSpaces(s, k)
+    // 继续吞并：直接相连的括号组（P(B)、sin(A/2) 这类函数调用）与以空格分隔的连乘原子
+    var includedGroup = false
+    while (true) {
+        val next = skipSpaces(s, end)
+        if (next >= s.length) break
+        val c = s[next]
+        when {
+            next == end && (c == '(' || c == '[' || c == '（' || c == '【') -> {
+                if (differential && !includedGroup) break
+                val close = matchingClose(s, next) ?: break
+                end = close + 1
+                includedGroup = true
+            }
+            isAtomChar(c) && !(next == end) -> {
+                val k = scanDenominatorAtom(s, next)
+                if (k <= next) break
+                end = k
+            }
+            else -> break
+        }
     }
     return DenScan(end, grouped = false)
+}
+
+private fun scanDenominatorAtom(s: String, start: Int): Int {
+    var end = start
+    while (end < s.length && isAtomChar(s[end])) end++
+    return end
 }
 
 internal fun skipSpaces(s: String, from: Int): Int {

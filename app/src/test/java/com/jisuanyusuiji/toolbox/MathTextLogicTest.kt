@@ -115,6 +115,27 @@ class MathTextLogicTest {
     }
 
     @Test
+    fun fraction_functionCallDenominator_isStacked() {
+        val nodes = parseMathNodes(prettifyMath("P(A|B) = P(AB)/P(B)"))
+        val frac = nodes.filterIsInstance<MathNode.Frac>().single()
+        assertEquals("P(AB)", plainText(frac.num))
+        assertEquals("P(B)", plainText(frac.den))
+    }
+
+    @Test
+    fun fraction_trigDenominator_keepsFunctionCall() {
+        val nodes = parseMathNodes(prettifyMath("n = sin((A+δ)/2)/sin(A/2)"))
+        val fracs = nodes.filterIsInstance<MathNode.Frac>()
+        assertTrue(fracs.any { plainText(it.den).startsWith("sin(A/2)") })
+    }
+
+    @Test
+    fun fraction_differentialOperator_isNotSwallowingTheGroup() {
+        val nodes = parseMathNodes(prettifyMath("f''(x) = d/dx(f'(x))"))
+        assertTrue(nodes.filterIsInstance<MathNode.Frac>().isEmpty())
+    }
+
+    @Test
     fun readMathToken_readsGroupAndAtom() {
         val group = readMathToken("(-(x-μ)^2/(2σ^2))abc", 0)
         assertEquals("(-(x-μ)^2/(2σ^2))", group.first)
