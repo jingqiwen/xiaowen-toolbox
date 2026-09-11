@@ -79,7 +79,12 @@ function parseCsvLine(line) {
 }
 
 function clean(s) {
-  return String(s || '').replace(/\r?\n/g, '；').replace(/\t/g, ' ').trim();
+  return String(s || '')
+    // ECDICT 用字面的 \n 表示换行，这里统一还原成真实换行
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, ' ')
+    .trim();
 }
 
 /** 词频排序键：越小越常用；无频率数据的排最后 */
@@ -152,6 +157,7 @@ function topUp(pool, already, n) {
     const entry = {
       word: clean(f[0]).toLowerCase(),
       phonetic: clean(f[1]),
+      definition: clean(f[2]),
       translation: clean(f[3]),
       pos: clean(f[4]),
       collins: clean(f[5]),
@@ -170,7 +176,7 @@ function topUp(pool, already, n) {
   }
 
   const entryOf = w => byWord.get(w) || {
-    word: w, phonetic: '', translation: '', pos: '', collins: '', oxford: 0,
+    word: w, phonetic: '', definition: '', translation: '', pos: '', collins: '', oxford: 0,
     tags: [], bnc: '', frq: '', exchange: ''
   };
 
@@ -213,15 +219,22 @@ function topUp(pool, already, n) {
       zk,
       ...others
     ].filter(Boolean).join(' ');
+    const rawFrq = parseInt(e.frq, 10) || 0;
+    const rawBnc = parseInt(e.bnc, 10) || 0;
     out.write(JSON.stringify({
       w: e.word,
       p: e.phonetic,
+      // t：中文释义（保留换行，App 端按词性排版）
       t: e.translation,
+      // d：英文释义（截断，供“精讲”展示）
+      d: e.definition ? e.definition.slice(0, 500) : '',
       s: e.pos,
       c: e.collins,
       o: e.oxford,
       g: tags,
-      e: e.exchange
+      e: e.exchange,
+      // f：词频排名（COCA，0 表示无数据）
+      f: rawFrq > 0 ? rawFrq : rawBnc
     }) + '\n');
     count++;
   }

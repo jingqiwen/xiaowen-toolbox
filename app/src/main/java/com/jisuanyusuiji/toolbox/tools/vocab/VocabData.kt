@@ -14,7 +14,17 @@ data class VocabWord(
     val antonyms: String = "",
     val similar: String = "",
     val tags: String = "",
-    val collins: String = ""
+    val collins: String = "",
+    // ---------- 精讲字段（词库模式全部单词都有） ----------
+    /** 英文释义 */
+    val definition: String = "",
+    val plural: String = "",
+    val thirdPerson: String = "",
+    val ingForm: String = "",
+    val comparative: String = "",
+    val superlative: String = "",
+    /** 词频排名（COCA，越小越常用；0 表示无数据） */
+    val frequency: Int = 0
 )
 
 /** 内置高频词精讲（可自行导入更多词库）。 */

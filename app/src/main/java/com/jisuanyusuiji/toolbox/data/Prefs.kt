@@ -17,11 +17,12 @@ object Prefs {
     const val THEME_DARK = "dark"
 
     /** 用户协议版本号：以后修改协议内容时 +1，会要求用户重新同意。 */
-    const val AGREEMENT_VERSION = 1
+    const val AGREEMENT_VERSION = 2
 
     private const val FILE = "toolbox_settings"
     private const val KEY_THEME = "theme_mode"
     private const val KEY_SOUND = "sound_enabled"
+    private const val KEY_NETWORK = "network_enabled"
     private const val KEY_FAVORITES = "favorites"
     private const val KEY_RECENT = "recent_tools"
     private const val KEY_AGREEMENT_VERSION = "agreement_version"
@@ -34,6 +35,10 @@ object Prefs {
     private val _soundEnabled = MutableStateFlow(true)
     val soundEnabled: StateFlow<Boolean> = _soundEnabled
 
+    /** 是否允许联网（在线词典 / 检查更新）。默认开启，可在设置里关闭。 */
+    private val _networkEnabled = MutableStateFlow(true)
+    val networkEnabled: StateFlow<Boolean> = _networkEnabled
+
     private val _agreementAccepted = MutableStateFlow(false)
     val agreementAccepted: StateFlow<Boolean> = _agreementAccepted
 
@@ -42,6 +47,7 @@ object Prefs {
         appContext = context.applicationContext
         _themeMode.value = sp().getString(KEY_THEME, THEME_SYSTEM) ?: THEME_SYSTEM
         _soundEnabled.value = sp().getBoolean(KEY_SOUND, true)
+        _networkEnabled.value = sp().getBoolean(KEY_NETWORK, true)
         _agreementAccepted.value =
             sp().getInt(KEY_AGREEMENT_VERSION, 0) >= AGREEMENT_VERSION
     }
@@ -63,6 +69,11 @@ object Prefs {
     fun setSoundEnabled(enabled: Boolean) {
         _soundEnabled.value = enabled
         sp().edit().putBoolean(KEY_SOUND, enabled).apply()
+    }
+
+    fun setNetworkEnabled(enabled: Boolean) {
+        _networkEnabled.value = enabled
+        sp().edit().putBoolean(KEY_NETWORK, enabled).apply()
     }
 
     // ---------- 收藏 ----------
@@ -105,6 +116,7 @@ object Prefs {
         sp().edit().clear().apply()
         _themeMode.value = THEME_SYSTEM
         _soundEnabled.value = true
+        _networkEnabled.value = true
         _agreementAccepted.value = false
     }
 
