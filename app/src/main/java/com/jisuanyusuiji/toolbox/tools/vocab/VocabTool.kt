@@ -934,8 +934,8 @@ private fun StudyMode(
     val safeIndex = ((index % words.size) + words.size) % words.size
     val word = words[safeIndex]
 
-    // 换词后回到顶部：刚标记完就能看到下一张单词卡
-    LaunchedEffect(safeIndex) {
+    // 换词或换词库后回到顶部：刚标记完就能看到下一张单词卡
+    LaunchedEffect(safeIndex, words) {
         if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
             listState.animateScrollToItem(0)
         }
