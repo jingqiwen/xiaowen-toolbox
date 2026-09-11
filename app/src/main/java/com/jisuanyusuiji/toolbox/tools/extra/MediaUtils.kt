@@ -19,13 +19,17 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 
-/** 从 Uri 解码图片，自动处理 EXIF 旋转与超大图缩放。 */
+/** 从 Uri 解码图片，自动处理 EXIF 旋转与超大图缩放。确保返回软件位图（可安全绘制到 PDF/Canvas）。 */
 fun decodeImage(context: Context, uri: Uri, maxSize: Int = 4096): Bitmap? = try {
     var bmp: Bitmap? = null
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
         bmp = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.isMutableRequired = false
+            // 关键：默认可能返回 HARDWARE 位图，软件画布（PDF 等）无法绘制，会报
+            // "Software rendering doesn't support hardware bitmaps"
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.memorySizePolicy = ImageDecoder.MEMORY_POLICY_LOW_RAM
         }
     } else {
         val stream: InputStream = context.contentResolver.openInputStream(uri) ?: return null
@@ -50,11 +54,15 @@ fun decodeImage(context: Context, uri: Uri, maxSize: Int = 4096): Bitmap? = try 
             bmp = Bitmap.createBitmap(bmp!!, 0, 0, bmp!!.width, bmp!!.height, matrix, true)
         }
     }
-    bmp?.let {
-        if (max(it.width, it.height) > maxSize) {
-            val scale = maxSize.toFloat() / max(it.width, it.height)
-            Bitmap.createScaledBitmap(it, (it.width * scale).toInt(), (it.height * scale).toInt(), true)
-        } else it
+    bmp?.let { b ->
+        // 双保险：任何情况下都返回软件位图（HARDWARE 位图无法绘制到 PDF/Canvas）
+        val safe = if (b.config == Bitmap.Config.HARDWARE) {
+            b.copy(Bitmap.Config.ARGB_8888, false)
+        } else b
+        if (max(safe.width, safe.height) > maxSize) {
+            val scale = maxSize.toFloat() / max(safe.width, safe.height)
+            Bitmap.createScaledBitmap(safe, (safe.width * scale).toInt(), (safe.height * scale).toInt(), true)
+        } else safe
     }
 } catch (_: Exception) { null }
 

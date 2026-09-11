@@ -336,11 +336,15 @@ fun LongImageToPdfTool() {
     val bitmap = remember(uri) { uri?.let { decodeImage(context, it, 12000) } }
 
     fun run() {
-        val bmp = bitmap ?: run { error = "请先选择长图"; return }
+        val raw = bitmap ?: run { error = "请先选择长图"; return }
         error = ""
         message = ""
         busy = true
         try {
+            // 硬件位图无法绘制到软件画布（PDF）上，先转成软件位图
+            val bmp = if (raw.config == Bitmap.Config.HARDWARE) {
+                raw.copy(Bitmap.Config.ARGB_8888, false) ?: raw
+            } else raw
             if (bmp.width <= 0 || bmp.height <= 0) {
                 error = "图片尺寸无效"
                 return
