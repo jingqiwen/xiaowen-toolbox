@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.ErrorText
 import com.jisuanyusuiji.toolbox.ui.components.SectionCard
 import org.xmlpull.v1.XmlPullParser
@@ -54,6 +55,7 @@ fun PptToImagesTool() {
     var busy by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var saved by remember { mutableStateOf<SavedMedia?>(null) }
+    var resolution by remember { mutableStateOf(1920) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri = it }
 
     fun convert() {
@@ -62,14 +64,21 @@ fun PptToImagesTool() {
         try {
             val slides = parsePptxSlides(context, u)
             if (slides.isEmpty()) { error = "未读取到幻灯片内容"; busy = false; return }
-            var lastSaved: SavedMedia? = null
+            val width = resolution
+            val height = width * 9 / 16
+            val zipBytes = ByteArrayOutputStream()
+            val zip = ZipOutputStream(zipBytes)
             slides.forEachIndexed { index, lines ->
-                val bmp = renderSlide(lines, 1280, 720)
+                val bmp = renderSlide(lines, width, height)
                 if (index == 0) preview = bmp
-                lastSaved = saveBitmapMedia(context, bmp, "image/png", Bitmap.CompressFormat.PNG, 100, "PPT_${index + 1}.png")
+                val png = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                zip.putNextEntry(ZipEntry("slide_${String.format("%02d", index + 1)}.png"))
+                zip.write(png)
+                zip.closeEntry()
             }
-            saved = lastSaved
-            message = "已转换 ${slides.size} 页，每页保存为一张图片（最后一张的保存位置见下方）"
+            zip.close()
+            saved = saveMedia(context, zipBytes.toByteArray(), "application/zip", "PPT_IMAGES_${System.currentTimeMillis()}.zip")
+            message = "已转换 ${slides.size} 页为 PNG，并已打包为 ZIP（${width}×${height}）"
         } catch (e: Exception) {
             error = "转换失败：${e.message}"
         }
@@ -84,9 +93,16 @@ fun PptToImagesTool() {
             Button(onClick = { launcher.launch("application/vnd.openxmlformats-officedocument.presentationml.presentation") }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (uri == null) "📂 选择 .pptx 文件" else "✅ 已选择：${uri?.lastPathSegment ?: ""}")
             }
+            Spacer(Modifier.height(8.dp))
+            ChoiceChips(
+                options = listOf(1280, 1920, 2560),
+                selected = resolution,
+                onSelect = { resolution = it },
+                label = { if (it == 1280) "高清 720p" else if (it == 1920) "超清 1080p" else "2K" }
+            )
             Spacer(Modifier.height(10.dp))
             Button(onClick = { convert() }, enabled = uri != null && !busy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (busy) "转换中…" else "转换为图片")
+                Text(if (busy) "转换中…" else "转换为图片并打包 ZIP")
             }
             preview?.let {
                 Spacer(Modifier.height(10.dp))
@@ -100,7 +116,7 @@ fun PptToImagesTool() {
                 saved?.let { MediaResultActions(it) }
             }
         }
-        Text("说明：当前为本地文字版式转换（保留每页文字，图片/图表/动画不保留）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text("说明：当前为本地文字版式渲染（保留每页文字，图片/图表/动画/精确排版不保留）。要做到与 PowerPoint 完全一致的截图，需要 Office 渲染引擎，Android 本地无法实现。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
     }
 }
 

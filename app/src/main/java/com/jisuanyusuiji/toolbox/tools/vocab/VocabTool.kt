@@ -3,6 +3,7 @@ package com.jisuanyusuiji.toolbox.tools.vocab
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,23 +33,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jisuanyusuiji.toolbox.data.JsonStore
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import org.json.JSONArray
 import org.json.JSONObject
 
-private fun loadStringSet(store: JsonStore, key: String): MutableSet<String> {
-    val arr = store.getArray(key)
-    return (0 until arr.length()).mapNotNull { i ->
-        try { arr.getString(i) } catch (_: Exception) { null }
-    }.toMutableSet()
-}
+private const val ZONE_UNKNOWN = "不认识"
+private const val ZONE_FUZZY = "不熟悉"
+private const val ZONE_KNOWN = "掌握"
 
-private fun saveStringSet(store: JsonStore, key: String, set: Set<String>) {
-    val arr = JSONArray()
-    set.forEach { arr.put(it) }
-    store.putArray(key, arr)
+private fun VocabWord.hasTag(tag: String): Boolean =
+    tags.split(' ', '\t').any { it.equals(tag, true) }
+
+private fun zoneLabel(zone: String): String = when (zone) {
+    ZONE_KNOWN -> "✅ 掌握"
+    ZONE_FUZZY -> "🤔 不熟悉（模糊）"
+    else -> "😵 完全不认识"
 }
 
 @Composable
@@ -55,44 +58,120 @@ fun VocabTool() {
     val context = LocalContext.current
     val store = remember { JsonStore(context, "vocab") }
     var custom by remember { mutableStateOf(loadCustomWords(store)) }
-    var known by remember { mutableStateOf(loadStringSet(store, "known")) }
+    var zones by remember { mutableStateOf(loadZoneMap(store)) }
+    var zoneFilter by remember { mutableStateOf("全部") }
     var mode by remember { mutableStateOf("词库") }
     var level by remember { mutableStateOf("考研") }
+    var includeBasic by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var detail by remember { mutableStateOf<VocabWord?>(null) }
     var showImport by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
 
+    fun markZone(word: String, zone: String?) {
+        val next = zones.toMutableMap()
+        if (zone == null) next.remove(word) else next[word] = zone
+        zones = next
+        saveZoneMap(store, zones)
+    }
+
+    fun clearZone(zone: String) {
+        val next = zones.toMutableMap()
+        next.entries.removeAll { it.value == zone }
+        zones = next
+        saveZoneMap(store, zones)
+    }
+
     val bulk = remember { loadBulkWords(context) }
-    val levelList = remember(level, custom, bulk) {
+    // 每个级别的“核心标签”（官方大纲收录）与“基础标签”（含基础词开关时并入）
+    val coreTags = remember(level) {
+        when (level) {
+            "考研" -> listOf("ky")
+            "四级" -> listOf("cet4")
+            "六级" -> listOf("cet6")
+            else -> emptyList()
+        }
+    }
+    val basicTags = remember(level) {
+        when (level) {
+            "考研" -> listOf("cet6", "cet4", "gk", "zk")
+            "四级" -> listOf("gk", "zk")
+            "六级" -> listOf("cet4", "gk", "zk")
+            else -> emptyList()
+        }
+    }
+    val levelList = remember(level, custom, bulk, includeBasic) {
         when (level) {
             "内置精讲" -> VocabData.builtIn
             "我的词库" -> custom
-            "考研" -> bulk.filter { it.tags.contains("ky") }
-            "四级" -> bulk.filter { it.tags.contains("cet4") }
-            "六级" -> bulk.filter { it.tags.contains("cet6") }
-            else -> bulk
+            else -> bulk.filter { word ->
+                coreTags.any { word.hasTag(it) } || (includeBasic && basicTags.any { word.hasTag(it) })
+            }
         }
     }
-    val filtered = remember(query, levelList) {
-        if (query.isBlank()) levelList
-        else levelList.filter {
-            it.word.contains(query, true) || it.meanings.contains(query, true) || it.phrases.contains(query, true)
+    val levelCounts = remember(bulk, includeBasic) {
+        fun count(core: List<String>, basic: List<String>) =
+            bulk.count { word -> core.any { word.hasTag(it) } || (includeBasic && basic.any { word.hasTag(it) }) }
+        mapOf(
+            "考研" to count(listOf("ky"), listOf("cet6", "cet4", "gk", "zk")),
+            "四级" to count(listOf("cet4"), listOf("gk", "zk")),
+            "六级" to count(listOf("cet6"), listOf("cet4", "gk", "zk"))
+        )
+    }
+    val filtered = remember(query, levelList, zoneFilter, zones) {
+        levelList.filter { word ->
+            (zoneFilter == "全部" || zones[word.word] == zoneFilter) &&
+                (query.isBlank() || word.word.contains(query, true) || word.meanings.contains(query, true) || word.phrases.contains(query, true))
         }
     }
+    val knownCount = zones.values.count { it == ZONE_KNOWN }
+    val fuzzyCount = zones.values.count { it == ZONE_FUZZY }
+    val unknownCount = zones.values.count { it == ZONE_UNKNOWN }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            "📚 背单词 · ${level} · 共 ${levelList.size} 词（已掌握 ${known.size}）",
+            "📚 背单词 · ${level} · ${levelList.size} 词",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "掌握 $knownCount · 不熟悉 $fuzzyCount · 完全不认识 $unknownCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
         ChoiceChips(
             listOf("内置精讲", "考研", "四级", "六级", "我的词库"),
             level,
             { level = it },
-            { it }
+            {
+                when (it) {
+                    "考研", "四级", "六级" -> "$it ${levelCounts[it] ?: 0}"
+                    else -> it
+                }
+            }
+        )
+        if (level == "考研" || level == "四级" || level == "六级") {
+            Spacer(Modifier.height(6.dp))
+            ChoiceChips(
+                listOf(false, true),
+                includeBasic,
+                { includeBasic = it },
+                { if (it) "含基础词（补全）" else "官方大纲规模" }
+            )
+            Text(
+                if (includeBasic) "已并入中学 / 四级基础词，词表更全，适合零基础或查漏补缺"
+                else "按考纲词数整理；打开“含基础词”可并入中学 / 四级基础词",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        ChoiceChips(
+            listOf("全部", ZONE_UNKNOWN, ZONE_FUZZY, ZONE_KNOWN),
+            zoneFilter,
+            { zoneFilter = it },
+            { if (it == "全部") "全部分区" else zoneLabel(it) }
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -130,9 +209,17 @@ fun VocabTool() {
                                 Text(word.word, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.padding(4.dp))
                                 Text(word.phonetic, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (known.contains(word.word)) {
+                                val zone = zones[word.word]
+                                if (zone != null) {
                                     Spacer(Modifier.padding(4.dp))
-                                    Text("✅", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        when (zone) {
+                                            ZONE_KNOWN -> "✅"
+                                            ZONE_FUZZY -> "🤔"
+                                            else -> "😵"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
                             }
                             Text(word.meanings, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
@@ -146,11 +233,9 @@ fun VocabTool() {
         } else {
             StudyMode(
                 words = filtered.ifEmpty { levelList },
-                known = known,
-                onKnown = { word, isKnown ->
-                    known = if (isKnown) (known + word).toMutableSet() else (known - word).toMutableSet()
-                    saveStringSet(store, "known", known)
-                }
+                zones = zones,
+                onZone = { word, zone -> markZone(word, zone) },
+                onClearZone = { clearZone(it) }
             )
         }
     }
@@ -174,6 +259,17 @@ fun VocabTool() {
                     if (word.similar.isNotBlank()) InfoLine("形近词", word.similar)
                     if (word.tags.isNotBlank()) InfoLine("词库标签", word.tags.uppercase())
                     if (word.collins.isNotBlank() && word.collins != "0") InfoLine("柯林斯星级", word.collins)
+                    Spacer(Modifier.height(10.dp))
+                    Text("加入分区", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { markZone(word.word, ZONE_UNKNOWN) }) { Text("😵 不认识") }
+                        OutlinedButton(onClick = { markZone(word.word, ZONE_FUZZY) }) { Text("🤔 不熟悉") }
+                        OutlinedButton(onClick = { markZone(word.word, ZONE_KNOWN) }) { Text("✅ 掌握") }
+                    }
+                    if (zones.containsKey(word.word)) {
+                        TextButton(onClick = { markZone(word.word, null) }) { Text("移出分区") }
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { detail = null }) { Text("关闭") } }
@@ -233,54 +329,192 @@ fun VocabTool() {
     }
 }
 
+/**
+ * 背单词模式：上方是单词卡片，下方是不认识区 / 不熟悉区 / 掌握区三个分区。
+ * 点击分区里的单词可以直接跳到该单词，便于重点复习。
+ */
 @Composable
-private fun StudyMode(words: List<VocabWord>, known: Set<String>, onKnown: (String, Boolean) -> Unit) {
+private fun StudyMode(
+    words: List<VocabWord>,
+    zones: Map<String, String>,
+    onZone: (String, String?) -> Unit,
+    onClearZone: (String) -> Unit
+) {
     var index by remember { mutableStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
-    val word = words.getOrNull(index % words.size.coerceAtLeast(1))
 
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (word == null) {
-            Text("词库为空")
-            return@Column
-        }
-        Text("${index + 1} / ${words.size}", style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(16.dp))
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(16.dp))
-                if (revealed) {
-                    Text(word.meanings, style = MaterialTheme.typography.bodyLarge)
-                    if (word.phrases.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("搭配：${word.phrases}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (word.example.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("例句：${word.example}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                } else {
-                    Text("点击下方“显示释义”查看答案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (words.isEmpty()) {
+        Text("词库为空", modifier = Modifier.padding(16.dp))
+        return
+    }
+    LaunchedEffect(words.size) { if (index >= words.size) index = 0 }
+    val word = words[index % words.size]
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Column {
+                Text("${index + 1} / ${words.size}", style = MaterialTheme.typography.bodySmall)
+                zones[word.word]?.let {
+                    Text(
+                        "当前标记：${zoneLabel(it)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-        if (!revealed) {
-            Button(onClick = { revealed = true }, modifier = Modifier.fillMaxWidth()) { Text("显示释义") }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = {
-                    onKnown(word.word, false)
-                    index++
-                    revealed = false
-                }, modifier = Modifier.weight(1f)) { Text("不认识") }
-                Button(onClick = {
-                    onKnown(word.word, true)
-                    index++
-                    revealed = false
-                }, modifier = Modifier.weight(1f)) { Text("认识 ✅") }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(16.dp))
+                    if (revealed) {
+                        Text(word.meanings, style = MaterialTheme.typography.bodyLarge)
+                        if (word.phrases.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text("搭配：${word.phrases}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (word.example.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text("例句：${word.example}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else {
+                        Text("点击下方“显示释义”查看答案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        item {
+            if (!revealed) {
+                Button(onClick = { revealed = true }, modifier = Modifier.fillMaxWidth()) { Text("显示释义") }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        onZone(word.word, ZONE_UNKNOWN)
+                        index++
+                        revealed = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text("😵 完全不认识") }
+                    OutlinedButton(onClick = {
+                        onZone(word.word, ZONE_FUZZY)
+                        index++
+                        revealed = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text("🤔 不熟悉（模糊）") }
+                    Button(onClick = {
+                        onZone(word.word, ZONE_KNOWN)
+                        index++
+                        revealed = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text("✅ 掌握") }
+                    if (zones.containsKey(word.word)) {
+                        TextButton(onClick = { onZone(word.word, null) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("清除该词的标记")
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Text(
+                "📂 单词分区（共 ${zones.size} 词已标记，点击分区中的单词可跳转）",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+        item {
+            ZoneSection(
+                title = "😵 不认识区（完全不认识）",
+                words = words.filter { zones[it.word] == ZONE_UNKNOWN },
+                onJump = { w ->
+                    val i = words.indexOf(w)
+                    if (i >= 0) {
+                        index = i
+                        revealed = false
+                    }
+                },
+                onClear = { onClearZone(ZONE_UNKNOWN) }
+            )
+        }
+        item {
+            ZoneSection(
+                title = "🤔 不熟悉区（模糊）",
+                words = words.filter { zones[it.word] == ZONE_FUZZY },
+                onJump = { w ->
+                    val i = words.indexOf(w)
+                    if (i >= 0) {
+                        index = i
+                        revealed = false
+                    }
+                },
+                onClear = { onClearZone(ZONE_FUZZY) }
+            )
+        }
+        item {
+            ZoneSection(
+                title = "✅ 掌握区",
+                words = words.filter { zones[it.word] == ZONE_KNOWN },
+                onJump = { w ->
+                    val i = words.indexOf(w)
+                    if (i >= 0) {
+                        index = i
+                        revealed = false
+                    }
+                },
+                onClear = { onClearZone(ZONE_KNOWN) }
+            )
+        }
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun ZoneSection(
+    title: String,
+    words: List<VocabWord>,
+    onJump: (VocabWord) -> Unit,
+    onClear: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("${words.size} 词", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (words.isNotEmpty()) {
+                    TextButton(onClick = onClear, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("清空") }
+                }
+            }
+            if (words.isEmpty()) {
+                Text("暂无单词", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                words.chunked(3).forEach { rowWords ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        rowWords.forEach { w ->
+                            OutlinedButton(
+                                onClick = { onJump(w) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    w.word,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                        repeat(3 - rowWords.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
@@ -316,6 +550,19 @@ private fun loadBulkWords(context: Context): List<VocabWord> = try {
     }
 } catch (_: Exception) {
     emptyList()
+}
+
+private fun loadZoneMap(store: JsonStore): MutableMap<String, String> {
+    val obj = store.getObject("zones")
+    val map = mutableMapOf<String, String>()
+    obj.keys().forEach { key ->
+        try { map[key] = obj.getString(key) } catch (_: Exception) {}
+    }
+    return map
+}
+
+private fun saveZoneMap(store: JsonStore, map: Map<String, String>) {
+    store.putObject("zones", JSONObject(map))
 }
 
 private fun loadCustomWords(store: JsonStore): MutableList<VocabWord> {

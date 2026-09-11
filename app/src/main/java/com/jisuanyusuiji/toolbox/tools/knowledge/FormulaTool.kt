@@ -29,14 +29,21 @@ import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 fun FormulaTool() {
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("全部") }
+    var chapter by remember { mutableStateOf("全部") }
     var level by remember { mutableStateOf("全部") }
 
-    val allFormulas = remember { FormulaData.all + FormulaDataExtra.all }
+    val allFormulas = remember { FormulaData.all + FormulaDataExtra.all + FormulaDataBooks.all }
     val categories = remember { listOf("全部") + allFormulas.map { it.category }.distinct() }
-    val levels = listOf("全部", "小学", "初中", "高中", "大学", "考研", "研究生", "通用")
-    val items = remember(query, category, level) {
+    val levels = listOf("全部", "小学", "初中", "高中", "大学", "大学教材", "考研", "研究生", "通用")
+    val chapters = remember(category) {
+        if (category == "全部") emptyList()
+        else listOf("全部") + allFormulas.filter { it.category == category }
+            .map { it.chapter }.filter { it.isNotBlank() }.distinct()
+    }
+    val items = remember(query, category, chapter, level) {
         allFormulas.filter { item ->
             (category == "全部" || item.category == category) &&
+                (chapter == "全部" || item.chapter == chapter) &&
                 (level == "全部" || item.level == level) &&
                 (query.isBlank() ||
                     item.name.contains(query, true) ||
@@ -72,22 +79,45 @@ fun FormulaTool() {
         ChoiceChips(
             options = categories,
             selected = category,
-            onSelect = { category = it },
+            onSelect = {
+                category = it
+                chapter = "全部"
+            },
             label = { it },
             modifier = Modifier.padding(horizontal = 16.dp)
         )
+        if (chapters.size > 1) {
+            Spacer(Modifier.height(6.dp))
+            ChoiceChips(
+                options = chapters,
+                selected = chapter,
+                onSelect = { chapter = it },
+                label = { it },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
         Spacer(Modifier.height(8.dp))
         LazyColumn(
             modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items, key = { it.category + it.name }) { formula ->
+            items(items, key = { it.category + "|" + it.chapter + "|" + it.name + "|" + it.expression }) { formula ->
                 Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text(
-                            "${formula.name}  ·  ${formula.category}",
+                            formula.name,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            buildString {
+                                append(formula.category)
+                                if (formula.chapter.isNotBlank()) append(" · ${formula.chapter}")
+                                append(" · ${formula.level}")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(

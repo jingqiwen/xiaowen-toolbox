@@ -1,11 +1,14 @@
 package com.jisuanyusuiji.toolbox.tools.knowledge
 
 data class FormulaItem(
+    /** 分类（教材类公式为书名，如“高等数学上”） */
     val category: String,
     val name: String,
     val expression: String,
     val note: String,
-    val level: String = "通用"
+    val level: String = "通用",
+    /** 章节（大学教材公式用于二级筛选，可空） */
+    val chapter: String = ""
 )
 
 object FormulaData {

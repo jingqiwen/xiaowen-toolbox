@@ -52,12 +52,13 @@ import com.jisuanyusuiji.toolbox.tools.extra.VideoEditTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToAudioTool
 import com.jisuanyusuiji.toolbox.tools.extra.VideoToGifTool
 import com.jisuanyusuiji.toolbox.tools.extra.WordToPdfTool
+import com.jisuanyusuiji.toolbox.tools.extra.ZipCompressTool
+import com.jisuanyusuiji.toolbox.tools.extra.ZipExtractTool
 import com.jisuanyusuiji.toolbox.tools.graph.FunctionGraphTool
 import com.jisuanyusuiji.toolbox.tools.graph.ResearchPlotTool
 import com.jisuanyusuiji.toolbox.tools.graph.Surface3DTool
 import com.jisuanyusuiji.toolbox.tools.probability.ProbabilityTool
 import com.jisuanyusuiji.toolbox.tools.vocab.VocabTool
-import com.jisuanyusuiji.toolbox.tools.knowledge.CarLogoTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.FormulaTool
 import com.jisuanyusuiji.toolbox.tools.knowledge.ShortcutTool
 import com.jisuanyusuiji.toolbox.tools.random.CoinFlipTool
@@ -172,10 +173,9 @@ object ToolRegistry {
         ToolDef("graph_3d", "三维函数绘图器", "z=f(x,y) 曲面，旋转查看与导出", "🧊", ToolCategory.GRAPH) { Surface3DTool() },
         ToolDef("research_plot", "科研绘图", "折线/柱状+误差+散点/箱线/小提琴/热力图/PCA 等 12 种", "📊", ToolCategory.GRAPH) { ResearchPlotTool() },
 
-        // ---------- 图鉴查询 ----------
-        ToolDef("car_badges", "车标图鉴", "170+ 车标，自动加载公开版权车标，可自行导入", "🚗", ToolCategory.KNOWLEDGE) { CarLogoTool() },
+        // ---------- 知识查询 ----------
         ToolDef("shortcut_keys", "电脑快捷键查询", "Windows / macOS 常用与进阶快捷键", "⌨️", ToolCategory.KNOWLEDGE) { ShortcutTool() },
-        ToolDef("formula_query", "数学物理公式查询", "约 150 条数学/物理公式，可搜索分类", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
+        ToolDef("formula_query", "数学物理公式查询", "小学到大学教材公式，含高数/线代/概率/复变/大物，可按教材章节筛选", "🧮", ToolCategory.KNOWLEDGE) { FormulaTool() },
         ToolDef("probability", "概率论公式与分布", "概率公式大全 + 正态/二项/泊松等分布计算", "🎲", ToolCategory.KNOWLEDGE) { ProbabilityTool() },
         ToolDef("vocab", "考研背单词", "词库搜索、卡片背诵、自定义词库导入", "📚", ToolCategory.KNOWLEDGE) { VocabTool() },
 
@@ -191,7 +191,9 @@ object ToolRegistry {
         ToolDef("flashlight", "手电筒", "一键开关闪光灯，退出自动关闭", "🔦", ToolCategory.EXTRA) { FlashlightTool() },
         ToolDef("compass", "指南针", "传感器实时方向与角度", "🧭", ToolCategory.EXTRA) { CompassTool() },
         ToolDef("mirror", "镜子", "前置摄像头全屏镜像预览", "🪞", ToolCategory.EXTRA) { MirrorTool() },
-        ToolDef("recorder", "录音机", "本地录音、播放、分享、删除", "🎙️", ToolCategory.EXTRA) { RecorderTool() }
+        ToolDef("recorder", "录音机", "本地录音、播放、分享、删除", "🎙️", ToolCategory.EXTRA) { RecorderTool() },
+        ToolDef("zip_compress", "压缩文件", "多选文件打包成 ZIP，本地处理", "🗜️", ToolCategory.EXTRA) { ZipCompressTool() },
+        ToolDef("zip_extract", "解压文件", "ZIP 解压到应用文件夹", "📦", ToolCategory.EXTRA) { ZipExtractTool() }
     )
 
     fun byId(id: String): ToolDef? = all.firstOrNull { it.id == id }

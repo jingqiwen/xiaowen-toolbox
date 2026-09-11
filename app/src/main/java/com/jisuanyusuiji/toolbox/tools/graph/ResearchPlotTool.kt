@@ -232,7 +232,8 @@ fun ResearchPlotTool() {
                 listOf(
                     "折线图", "柱状图 + 误差棒 + 散点", "箱线图", "小提琴图",
                     "散点图 + 线性拟合", "直方图 + KDE", "热力图", "配对图",
-                    "平行坐标图", "PCA 散点图", "Q-Q 图", "极坐标图"
+                    "平行坐标图", "PCA 散点图", "t-SNE 降维", "Q-Q 图",
+                    "极坐标图", "矢量场图", "瀑布图"
                 ),
                 plotType,
                 { plotType = it },
@@ -483,6 +484,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawResearchPlot(
             }
             drawLine(Color(0xFFD55E00), Offset(px(qMin, qMin, qMax), py(m + s * qMin, min, max)), Offset(px(qMax, qMin, qMax), py(m + s * qMax, min, max)), 4f)
         }
+        "t-SNE 降维" -> {
+            val pts = tsne2(data.rows)
+            if (pts.isEmpty()) throw IllegalArgumentException("数据不足（至少 5 行 2 列，最多 150 行）")
+            val xs = pts.map { it.first }; val ys = pts.map { it.second }
+            val xMin = xs.minOrNull() ?: 0.0; val xMax = xs.maxOrNull() ?: 1.0
+            val yMin = ys.minOrNull() ?: 0.0; val yMax = ys.maxOrNull() ?: 1.0
+            pts.forEach { (x, y) -> drawCircle(Color(0xFFCC79A7), 8f, Offset(px(x, xMin, xMax), py(y, yMin, yMax))) }
+        }
         "极坐标图" -> {
             if (data.columns.size < 2) throw IllegalArgumentException("极坐标图需要两列（角度、半径）")
             val angles = data.columns[0]; val radii = data.columns[1]
@@ -497,5 +506,111 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawResearchPlot(
                 drawCircle(Color(0xFFD55E00), 7f, Offset(x.toFloat(), y.toFloat()))
             }
         }
+        "矢量场图" -> {
+            if (data.columns.size < 4) throw IllegalArgumentException("矢量场需要四列：x, y, u, v")
+            val xs = data.columns[0]; val ys = data.columns[1]
+            val us = data.columns[2]; val vs = data.columns[3]
+            val xMin = xs.minOrNull() ?: 0.0; val xMax = xs.maxOrNull() ?: 1.0
+            val yMin = ys.minOrNull() ?: 0.0; val yMax = ys.maxOrNull() ?: 1.0
+            val uMax = maxOf(us.maxOfOrNull { abs(it) } ?: 1.0, vs.maxOfOrNull { abs(it) } ?: 1.0).coerceAtLeast(1e-9)
+            val scale = minOf(w, h) * 0.35 / uMax
+            for (i in xs.indices) {
+                if (i >= ys.size || i >= us.size || i >= vs.size) break
+                val x1 = px(xs[i], xMin, xMax); val y1 = py(ys[i], yMin, yMax)
+                val x2 = x1 + (us[i] * scale).toFloat(); val y2 = y1 - (vs[i] * scale).toFloat()
+                drawLine(Color(0xFF0072B2), Offset(x1, y1), Offset(x2, y2), 3f)
+                drawCircle(Color(0xFFD55E00), 4f, Offset(x1, y1))
+            }
+        }
+        "瀑布图" -> {
+            val values = data.columns[0]
+            if (values.isEmpty()) throw IllegalArgumentException("没有数据")
+            var cumulative = 0.0
+            val totals = values.map { cumulative += it; cumulative }
+            val yMin = minOf(0.0, totals.minOrNull() ?: 0.0)
+            val yMax = maxOf(0.0, totals.maxOrNull() ?: 1.0)
+            val slot = w / values.size.coerceAtLeast(1)
+            var prevTop: Float? = null
+            values.forEachIndexed { i, v ->
+                val base = if (i == 0) 0.0 else totals[i - 1]
+                val topValue = totals[i]
+                val yTop = py(topValue, yMin, yMax)
+                val yBase = py(base, yMin, yMax)
+                val color = if (v >= 0) Color(0xFF009E73) else Color(0xFFD55E00)
+                drawRect(
+                    color.copy(alpha = 0.8f),
+                    topLeft = Offset(marginL + slot * i + slot * 0.15f, minOf(yTop, yBase)),
+                    size = androidx.compose.ui.geometry.Size(slot * 0.7f, abs(yBase - yTop).coerceAtLeast(1f))
+                )
+                prevTop?.let { p ->
+                    drawLine(Color(0x66000000), Offset(marginL + slot * (i - 1) + slot * 0.85f, p), Offset(marginL + slot * i + slot * 0.15f, yBase), 2f)
+                }
+                prevTop = yTop
+            }
+        }
     }
+}
+
+private fun tsne2(rows: List<List<Double>>, iterations: Int = 160): List<Pair<Double, Double>> {
+    if (rows.size < 5) return emptyList()
+    val n = rows.size.coerceAtMost(150)
+    val data = rows.take(n)
+    val dims = data.first().size
+    if (dims < 2) return emptyList()
+    val means = (0 until dims).map { c -> data.sumOf { it[c] } / n }
+    val stds = (0 until dims).map { c ->
+        sqrt(data.sumOf { (it[c] - means[c]).pow(2) } / n).coerceAtLeast(1e-9)
+    }
+    val x = data.map { row -> DoubleArray(dims) { c -> (row[c] - means[c]) / stds[c] } }
+    val dist = Array(n) { i -> DoubleArray(n) { j ->
+        if (i == j) 0.0 else sqrt(x[i].indices.sumOf { k -> (x[i][k] - x[j][k]).pow(2) })
+    } }
+    var sigma = 1.0
+    run {
+        var sum = 0.0; var count = 0
+        for (i in 0 until n) for (j in i + 1 until n) { sum += dist[i][j]; count++ }
+        if (count > 0) sigma = (sum / count / 2.0).coerceAtLeast(1e-6)
+    }
+    val p = Array(n) { DoubleArray(n) }
+    var pSum = 0.0
+    for (i in 0 until n) for (j in 0 until n) {
+        if (i != j) {
+            p[i][j] = exp(-dist[i][j] * dist[i][j] / (2 * sigma * sigma))
+            pSum += p[i][j]
+        }
+    }
+    if (pSum <= 0) return emptyList()
+    for (i in 0 until n) for (j in 0 until n) p[i][j] = (p[i][j] / pSum).coerceAtLeast(1e-12)
+    val y = Array(n) { DoubleArray(2) { kotlin.random.Random.nextDouble() * 1e-4 } }
+    val velocity = Array(n) { DoubleArray(2) }
+    val lr = 0.6
+    repeat(iterations) {
+        val q = Array(n) { DoubleArray(n) }
+        var qSum = 0.0
+        for (i in 0 until n) for (j in i + 1 until n) {
+            val d = 1.0 / (1.0 + (y[i][0] - y[j][0]).pow(2) + (y[i][1] - y[j][1]).pow(2))
+            q[i][j] = d; q[j][i] = d; qSum += 2 * d
+        }
+        if (qSum <= 0) return@repeat
+        for (i in 0 until n) for (j in 0 until n) q[i][j] = (q[i][j] / qSum).coerceAtLeast(1e-12)
+        val grad = Array(n) { DoubleArray(2) }
+        for (i in 0 until n) for (j in 0 until n) {
+            if (i == j) continue
+            val d2 = 1.0 + (y[i][0] - y[j][0]).pow(2) + (y[i][1] - y[j][1]).pow(2)
+            val factor = 4 * (p[i][j] - q[i][j]) / d2
+            grad[i][0] += factor * (y[i][0] - y[j][0])
+            grad[i][1] += factor * (y[i][1] - y[j][1])
+        }
+        for (i in 0 until n) {
+            velocity[i][0] = 0.8 * velocity[i][0] - lr * grad[i][0]
+            velocity[i][1] = 0.8 * velocity[i][1] - lr * grad[i][1]
+            y[i][0] += velocity[i][0]
+            y[i][1] += velocity[i][1]
+        }
+        var mx = 0.0; var my = 0.0
+        for (i in 0 until n) { mx += y[i][0]; my += y[i][1] }
+        mx /= n; my /= n
+        for (i in 0 until n) { y[i][0] -= mx; y[i][1] -= my }
+    }
+    return y.map { it[0] to it[1] }
 }

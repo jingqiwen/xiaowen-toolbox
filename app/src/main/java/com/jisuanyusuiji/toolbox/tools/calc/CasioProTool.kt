@@ -1,5 +1,6 @@
 package com.jisuanyusuiji.toolbox.tools.calc
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,10 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -268,7 +273,7 @@ fun CasioProTool() {
         )
     }
 
-    val modes = listOf("统计", "回归", "函数表格", "常量表", "单位换算", "向量", "二次不等式", "变量存储")
+    val modes = listOf("统计", "回归", "函数表格", "电子表格", "常量表", "单位换算", "向量", "二次不等式", "变量存储")
 
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -316,6 +321,7 @@ fun CasioProTool() {
                     InfoRow("${c.name}（${c.symbol}）", "${c.value} ${c.unit}")
                 }
             }
+            "电子表格" -> SpreadsheetSection()
             "单位换算" -> UnitConversionSection()
             "向量" -> SectionCard(title = "二维/三维向量") {
                 LabeledField(p1, { p1 = it }, "向量 A（如 1,2,3）")
@@ -353,6 +359,108 @@ fun CasioProTool() {
 }
 
 private val regTypes = listOf("线性 y=a+bx", "二次 y=a+bx+cx²", "指数 y=a·e^(bx)", "对数 y=a+b·ln(x)", "幂函数 y=a·x^b")
+
+@Composable
+private fun SpreadsheetSection() {
+    val cols = listOf("A", "B", "C", "D", "E")
+    val rows = 45
+    val cells = remember { mutableStateMapOf<String, String>() }
+    var computed by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+    var error by remember { mutableStateOf("") }
+    fun ref(c: Int, r: Int) = "${cols[c]}${r + 1}"
+
+    fun evalCell(ref: String, cache: MutableMap<String, Double>, visiting: MutableSet<String>): Double? {
+        cache[ref]?.let { return it }
+        if (!visiting.add(ref)) throw IllegalArgumentException("循环引用：$ref")
+        try {
+            val raw = cells[ref]?.trim().orEmpty()
+            if (raw.isEmpty()) return null
+            val value = if (!raw.startsWith("=")) {
+                raw.toDoubleOrNull() ?: throw IllegalArgumentException("$ref 不是数字：$raw")
+            } else {
+                var expr = raw.substring(1)
+                val rangeRegex = Regex("(SUM|AVERAGE|MIN|MAX|COUNT)\\(\\$?([A-E])\\$?(\\d+):\\$?([A-E])\\$?(\\d+)\\)", RegexOption.IGNORE_CASE)
+                expr = rangeRegex.replace(expr) { m ->
+                    val fn = m.groupValues[1].uppercase()
+                    val c1 = cols.indexOf(m.groupValues[2]); val r1 = m.groupValues[3].toInt() - 1
+                    val c2 = cols.indexOf(m.groupValues[4]); val r2 = m.groupValues[5].toInt() - 1
+                    val values = mutableListOf<Double>()
+                    for (c in minOf(c1, c2)..maxOf(c1, c2)) {
+                        for (r in minOf(r1, r2)..maxOf(r1, r2)) {
+                            evalCell(ref(c, r), cache, visiting)?.let { values.add(it) }
+                        }
+                    }
+                    val res = when (fn) {
+                        "SUM" -> values.sum()
+                        "AVERAGE" -> if (values.isEmpty()) 0.0 else values.sum() / values.size
+                        "MIN" -> values.minOrNull() ?: 0.0
+                        "MAX" -> values.maxOrNull() ?: 0.0
+                        else -> values.size.toDouble()
+                    }
+                    res.toString()
+                }
+                expr = Regex("\\$?([A-E])\\$?(\\d+)").replace(expr) { m ->
+                    val target = "${m.groupValues[1]}${m.groupValues[2]}"
+                    (evalCell(target, cache, visiting) ?: 0.0).toString()
+                }
+                val r = CalcExpr.evaluate(expr)
+                if (!r.ok || r.value == null) throw IllegalArgumentException("$ref 公式错误：${r.error}")
+                r.value
+            }
+            cache[ref] = value
+            return value
+        } finally {
+            visiting.remove(ref)
+        }
+    }
+
+    Column {
+        SectionCard(title = "电子表格（5 列 × 45 行，支持 =SUM(A1:A5)、=A1+B1*2）") {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                Text("行", Modifier.width(40.dp))
+                cols.forEach { c -> Text(c, Modifier.width(86.dp), style = MaterialTheme.typography.titleMedium) }
+            }
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                items((0 until rows).toList()) { r ->
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                        Text("${r + 1}", Modifier.width(40.dp), style = MaterialTheme.typography.bodySmall)
+                        cols.forEachIndexed { c, name ->
+                            val key = ref(c, r)
+                            OutlinedTextField(
+                                value = cells[key].orEmpty(),
+                                onValueChange = { cells[key] = it },
+                                modifier = Modifier.width(86.dp).padding(horizontal = 2.dp),
+                                singleLine = true
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                error = ""
+                try {
+                    val cache = mutableMapOf<String, Double>()
+                    val results = mutableListOf<Pair<String, String>>()
+                    for (refKey in cells.keys) {
+                        val v = evalCell(refKey, cache, mutableSetOf())
+                        if (v != null) results.add(refKey to "%.6f".format(v).trimEnd('0').trimEnd('.', ','))
+                    }
+                    computed = results.sortedBy { it.first }
+                } catch (e: Exception) {
+                    error = e.message ?: "计算错误"
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("计算全部公式") }
+        }
+        ErrorText(error)
+        if (computed.isNotEmpty()) {
+            SectionCard(title = "计算结果") {
+                computed.take(100).forEach { (k, v) -> InfoRow("$k =", v) }
+            }
+        }
+        Text("支持：四则运算、括号、^、SUM/AVERAGE/MIN/MAX/COUNT、区域 A1:A5、绝对引用 \$A\$1（效果相同）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+    }
+}
 
 @Composable
 private fun UnitConversionSection() {
