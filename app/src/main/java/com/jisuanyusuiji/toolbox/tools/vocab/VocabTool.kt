@@ -1,6 +1,7 @@
 package com.jisuanyusuiji.toolbox.tools.vocab
 
 import android.content.Context
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -33,10 +34,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.data.JsonStore
 import com.jisuanyusuiji.toolbox.data.Net
 import com.jisuanyusuiji.toolbox.data.Prefs
@@ -45,6 +52,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val ZONE_UNKNOWN = "不认识"
 private const val ZONE_FUZZY = "不熟悉"
@@ -57,6 +67,99 @@ private fun zoneLabel(zone: String): String = when (zone) {
     ZONE_KNOWN -> "✅ 掌握"
     ZONE_FUZZY -> "🤔 不熟悉（模糊）"
     else -> "😵 完全不认识"
+}
+
+// ============================================================
+// 艾宾浩斯复习计划
+// ============================================================
+
+/** 一个单词的复习状态：当前记忆级别、下次复习时间、上次复习时间、复习次数。 */
+private data class ReviewState(val stage: Int, val dueAt: Long, val lastAt: Long, val reps: Int)
+
+/** 艾宾浩斯复习间隔：10 分钟 → 12 小时 → 1/2/4/7/15/30/60 天，每通过一次复习进入下一级。 */
+private val REVIEW_INTERVALS = listOf(
+    10 * 60_000L,
+    12 * 60 * 60_000L,
+    24 * 60 * 60_000L,
+    2 * 24 * 60 * 60_000L,
+    4 * 24 * 60 * 60_000L,
+    7 * 24 * 60 * 60_000L,
+    15 * 24 * 60 * 60_000L,
+    30 * 24 * 60 * 60_000L,
+    60 * 24 * 60 * 60_000L
+)
+private val REVIEW_LABELS = listOf("10 分钟", "12 小时", "1 天", "2 天", "4 天", "7 天", "15 天", "30 天", "60 天")
+
+private fun stageLabel(stage: Int): String =
+    "第 ${stage.coerceIn(0, REVIEW_LABELS.size - 1) + 1} 级 · 间隔 ${REVIEW_LABELS[stage.coerceIn(0, REVIEW_LABELS.size - 1)]}"
+
+private fun loadSchedule(store: JsonStore): MutableMap<String, ReviewState> {
+    val obj = store.getObject("schedule")
+    val map = mutableMapOf<String, ReviewState>()
+    obj.keys().forEach { key ->
+        try {
+            val a = obj.getJSONArray(key)
+            map[key] = ReviewState(a.getInt(0), a.getLong(1), a.getLong(2), a.getInt(3))
+        } catch (_: Exception) {
+        }
+    }
+    return map
+}
+
+private fun saveSchedule(store: JsonStore, map: Map<String, ReviewState>) {
+    val obj = JSONObject()
+    map.forEach { (key, s) ->
+        try {
+            obj.put(key, JSONArray().put(s.stage).put(s.dueAt).put(s.lastAt).put(s.reps))
+        } catch (_: Exception) {
+        }
+    }
+    store.putObject("schedule", obj)
+}
+
+/** 根据“完全不认识 / 不熟悉 / 掌握”推进或回退记忆级别。 */
+private fun advance(schedule: Map<String, ReviewState>, word: String, zone: String?): MutableMap<String, ReviewState> {
+    val now = System.currentTimeMillis()
+    val next = schedule.toMutableMap()
+    val current = schedule[word]
+    when (zone) {
+        null -> next.remove(word)
+        ZONE_UNKNOWN -> next[word] = ReviewState(0, now + REVIEW_INTERVALS[0], now, (current?.reps ?: 0) + 1)
+        ZONE_FUZZY -> {
+            val stage = ((current?.stage ?: 1) - 1).coerceAtLeast(0)
+            next[word] = ReviewState(stage, now + REVIEW_INTERVALS[stage], now, (current?.reps ?: 0) + 1)
+        }
+        else -> {
+            val stage = ((current?.stage ?: -1) + 1).coerceAtMost(REVIEW_INTERVALS.size - 1)
+            next[word] = ReviewState(stage, now + REVIEW_INTERVALS[stage], now, (current?.reps ?: 0) + 1)
+        }
+    }
+    return next
+}
+
+private fun dueLabel(dueAt: Long, now: Long = System.currentTimeMillis()): String {
+    val diff = dueAt - now
+    return when {
+        diff <= 0 -> "已到期"
+        diff < 60 * 60_000L -> "${diff / 60_000L + 1} 分钟后"
+        diff < 12 * 60 * 60_000L -> "今天 " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(dueAt))
+        diff < 24 * 60 * 60_000L -> "明天前"
+        diff < 2 * 24 * 60 * 60_000L -> "明天 " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(dueAt))
+        diff < 7 * 24 * 60 * 60_000L -> "${diff / (24 * 60 * 60_000L)} 天后"
+        else -> SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(dueAt))
+    }
+}
+
+private fun bucketLabel(dueAt: Long, now: Long = System.currentTimeMillis()): String {
+    val diff = dueAt - now
+    return when {
+        diff <= 0 -> "⏰ 已到期（现在复习）"
+        diff < 24 * 60 * 60_000L -> "📅 今天"
+        diff < 2 * 24 * 60 * 60_000L -> "📅 明天"
+        diff < 3 * 24 * 60 * 60_000L -> "📅 3 天内"
+        diff < 7 * 24 * 60 * 60_000L -> "📅 7 天内"
+        else -> "📅 以后"
+    }
 }
 
 private val POS_PREFIX = Regex("^([A-Za-z]{1,6}\\.|\\[[^\\]]{1,16}\\])\\s*(.*)$")
@@ -176,12 +279,20 @@ fun VocabTool() {
     var detail by remember { mutableStateOf<VocabWord?>(null) }
     var showImport by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
+    var schedule by remember { mutableStateOf(loadSchedule(store)) }
+    var reviewOnly by remember { mutableStateOf(false) }
+    var reviewSession by remember { mutableStateOf<List<VocabWord>>(emptyList()) }
+    var scheduleTick by remember { mutableStateOf(0) }
 
     fun markZone(word: String, zone: String?) {
         val next = zones.toMutableMap()
         if (zone == null) next.remove(word) else next[word] = zone
         zones = next
         saveZoneMap(store, zones)
+        // 同步推进艾宾浩斯复习计划
+        schedule = advance(schedule, word, zone)
+        saveSchedule(store, schedule)
+        scheduleTick++
     }
 
     fun clearZone(zone: String) {
@@ -233,11 +344,20 @@ fun VocabTool() {
                     word.meanings.contains(query, true) || word.phrases.contains(query, true))
         }
     }
+    // 到期待复习的单词
+    val dueWords = remember(levelList, schedule, scheduleTick) {
+        val nowMs = System.currentTimeMillis()
+        levelList.filter { w -> schedule[w.word]?.let { it.dueAt <= nowMs } == true }
+    }
     // 背单词用的列表：与词库筛选/分区标记解耦，保证“自动下一个”稳定；乱序版每次洗牌
-    val studyWords = remember(levelList, zoneFilter, shuffle, reshuffle) {
-        val base = if (zoneFilter == "全部") levelList
-        else levelList.filter { zones[it.word] == zoneFilter }.ifEmpty { levelList }
-        if (shuffle) base.shuffled() else base
+    val studyWords = remember(levelList, zoneFilter, shuffle, reshuffle, reviewOnly, reviewSession) {
+        if (reviewOnly) {
+            reviewSession.ifEmpty { levelList }
+        } else {
+            val base = if (zoneFilter == "全部") levelList
+            else levelList.filter { zones[it.word] == zoneFilter }.ifEmpty { levelList }
+            if (shuffle) base.shuffled() else base
+        }
     }
     val knownCount = zones.values.count { it == ZONE_KNOWN }
     val fuzzyCount = zones.values.count { it == ZONE_FUZZY }
@@ -298,18 +418,23 @@ fun VocabTool() {
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(
-                onClick = { mode = "词库" },
+                onClick = { mode = "词库"; reviewOnly = false },
                 modifier = Modifier.weight(1f),
                 enabled = mode != "词库"
-            ) { Text("词库") }
+            ) { Text("词库", maxLines = 1) }
             Button(
-                onClick = { mode = "背单词" },
+                onClick = { mode = "背单词"; reviewOnly = false },
                 modifier = Modifier.weight(1f),
-                enabled = mode != "背单词"
-            ) { Text("背单词") }
-            OutlinedButton(onClick = { showImport = true }, modifier = Modifier.weight(1f)) { Text("导入") }
+                enabled = mode != "背单词" || reviewOnly
+            ) { Text("背单词", maxLines = 1) }
+            Button(
+                onClick = { mode = "复习计划" },
+                modifier = Modifier.weight(1f),
+                enabled = mode != "复习计划"
+            ) { Text("复习计划", maxLines = 1) }
+            OutlinedButton(onClick = { showImport = true }, modifier = Modifier.weight(1f)) { Text("导入", maxLines = 1) }
         }
         Spacer(Modifier.height(8.dp))
 
@@ -354,10 +479,41 @@ fun VocabTool() {
                     item { Text("没有找到单词", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
+        } else if (mode == "复习计划") {
+            ReviewPlanPane(
+                modifier = Modifier.weight(1f),
+                dueWords = dueWords,
+                allWords = levelList,
+                schedule = schedule,
+                onStart = {
+                    reviewSession = dueWords
+                    reviewOnly = true
+                    mode = "背单词"
+                },
+                onOpenWord = { detail = it },
+                onReset = {
+                    schedule = mutableMapOf()
+                    saveSchedule(store, schedule)
+                    scheduleTick++
+                }
+            )
         } else {
+            if (reviewOnly) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🎯 今日复习模式 · ${studyWords.size} 词（按艾宾浩斯计划）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { reviewOnly = false }) { Text("退出复习") }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
             StudyMode(
                 words = studyWords,
                 zones = zones,
+                schedule = schedule,
                 onZone = { word, zone -> markZone(word, zone) },
                 onClearZone = { clearZone(it) },
                 onReshuffle = { if (shuffle) reshuffle++ }
@@ -553,6 +709,180 @@ private fun DetailBlock(title: String, value: String) {
     }
 }
 
+// ============================================================
+// 复习计划面板（艾宾浩斯曲线 + 到期/后续安排）
+// ============================================================
+@Composable
+private fun ReviewPlanPane(
+    modifier: Modifier,
+    dueWords: List<VocabWord>,
+    allWords: List<VocabWord>,
+    schedule: Map<String, ReviewState>,
+    onStart: () -> Unit,
+    onOpenWord: (VocabWord) -> Unit,
+    onReset: () -> Unit
+) {
+    val wordMap = remember(allWords) { allWords.associateBy { it.word } }
+    val entries = remember(schedule, wordMap) {
+        schedule.entries.sortedBy { it.value.dueAt }
+            .mapNotNull { (w, st) -> wordMap[w]?.let { it to st } }
+    }
+    val groups = entries.groupBy { bucketLabel(it.second.dueAt) }
+
+    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("🧠 艾宾浩斯复习计划", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "已安排 ${schedule.size} 词 · 现在到期 ${dueWords.size} 词 · 累计复习 ${schedule.values.sumOf { it.reps }} 次",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("📉 遗忘曲线与复习节点", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "每次复习都会把记忆拉回接近 100%，遗忘速度随之变慢。本 App 按 10 分钟 → 12 小时 → 1/2/4/7/15/30/60 天自动安排下一次复习。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    EbbinghausCurve()
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = onStart,
+                enabled = dueWords.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (dueWords.isEmpty()) "今天没有到期单词 🎉" else "▶ 开始今日复习（${dueWords.size} 词）")
+            }
+        }
+        if (schedule.isEmpty()) {
+            item {
+                Text(
+                    "还没有复习计划：去“背单词”给单词标记 😵 完全不认识 / 🤔 不熟悉 / ✅ 掌握，App 会自动按遗忘曲线安排复习。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            groups.forEach { (label, list) ->
+                item {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                items(list, key = { it.first.word }) { pair ->
+                    val w = pair.first
+                    val st = pair.second
+                    Card(Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(w.word, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "${stageLabel(st.stage)} · 下次：${dueLabel(st.dueAt)} · 已复习 ${st.reps} 次",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { onOpenWord(w) }) { Text("详情") }
+                        }
+                    }
+                }
+            }
+            item {
+                TextButton(onClick = onReset) { Text("清空复习计划（不影响单词分区）") }
+            }
+        }
+        item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+/** 示意性的艾宾浩斯遗忘曲线：多段指数衰减，复习点把保持率拉回 100%。 */
+@Composable
+private fun EbbinghausCurve() {
+    val lineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Canvas(Modifier.fillMaxWidth().height(190.dp)) {
+        val left = 34.dp.toPx()
+        val bottom = size.height - 30.dp.toPx()
+        val top = 12.dp.toPx()
+        val right = size.width - 10.dp.toPx()
+        drawLine(gridColor, Offset(left, top), Offset(left, bottom), strokeWidth = 2f)
+        drawLine(gridColor, Offset(left, bottom), Offset(right, bottom), strokeWidth = 2f)
+
+        val logMax = kotlin.math.ln(61f)
+        fun xOf(days: Float): Float = left + (right - left) * (kotlin.math.ln(1f + days) / logMax)
+
+        val nodes = listOf(0f, 0.5f, 1f, 2f, 4f, 7f, 15f, 30f, 60f)
+        var px = xOf(0f)
+        var py = top
+        for (i in nodes.indices) {
+            val start = nodes[i]
+            val end = if (i + 1 < nodes.size) nodes[i + 1] else 60f
+            // 每次复习后记忆强度翻倍：τ 指数增长
+            val tau = 0.5f * Math.pow(2.0, i.toDouble()).toFloat()
+            val steps = 26
+            for (s in 1..steps) {
+                val d = start + (end - start) * s / steps
+                val retention = kotlin.math.exp(-(d - start) / tau)
+                val x = xOf(d)
+                val y = bottom - (bottom - top) * retention
+                drawLine(lineColor, Offset(px, py), Offset(x, y), strokeWidth = 2.5f)
+                px = x
+                py = y
+            }
+            drawLine(
+                lineColor.copy(alpha = 0.3f),
+                Offset(xOf(start), top),
+                Offset(xOf(start), bottom),
+                strokeWidth = 1.5f
+            )
+            drawCircle(lineColor, radius = 3.5f, center = Offset(xOf(start), top))
+        }
+
+        drawIntoCanvas { canvas ->
+            val paint = android.graphics.Paint().apply {
+                color = textColor.toArgb()
+                textSize = 11.sp.toPx()
+                isAntiAlias = true
+            }
+            val axisPaint = android.graphics.Paint().apply {
+                color = lineColor.toArgb()
+                textSize = 11.sp.toPx()
+                isAntiAlias = true
+            }
+            canvas.nativeCanvas.drawText("保持率", 2.dp.toPx(), top + 4.dp.toPx(), axisPaint)
+            canvas.nativeCanvas.drawText("100%", 2.dp.toPx(), top + 18.dp.toPx(), paint)
+            canvas.nativeCanvas.drawText("0", 2.dp.toPx(), bottom + 4.dp.toPx(), paint)
+            listOf(2 to "1天", 4 to "4天", 6 to "15天", 8 to "60天").forEach { (index, text) ->
+                canvas.nativeCanvas.drawText(
+                    text,
+                    xOf(nodes[index]) - 10.dp.toPx(),
+                    bottom + 18.dp.toPx(),
+                    paint
+                )
+            }
+        }
+    }
+}
+
 /**
  * 背单词模式：一次显示一个单词，显示释义后点“完全不认识 / 不熟悉 / 掌握”，
  * 自动进入下一个单词；下方是不认识区 / 不熟悉区 / 掌握区三个分区。
@@ -561,6 +891,7 @@ private fun DetailBlock(title: String, value: String) {
 private fun StudyMode(
     words: List<VocabWord>,
     zones: Map<String, String>,
+    schedule: Map<String, ReviewState>,
     onZone: (String, String?) -> Unit,
     onClearZone: (String) -> Unit,
     onReshuffle: () -> Unit
@@ -601,6 +932,14 @@ private fun StudyMode(
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(word.word, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Text(word.phonetic, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    schedule[word.word]?.let { st ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "🧠 ${stageLabel(st.stage)} · 下次复习：${dueLabel(st.dueAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     if (revealed) {
                         formatMeanings(word.meanings).split('\n').filter { it.isNotBlank() }.forEach { line ->

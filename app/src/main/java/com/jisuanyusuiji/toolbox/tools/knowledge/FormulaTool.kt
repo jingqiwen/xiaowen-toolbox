@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,12 +28,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jisuanyusuiji.toolbox.ui.components.ChoiceChips
 import com.jisuanyusuiji.toolbox.ui.components.CopyButton
 import com.jisuanyusuiji.toolbox.ui.components.MathText
+import com.jisuanyusuiji.toolbox.ui.components.ShareButton
 
 /** 按“科目”归类的顺序（不用小学/初中/高中做分类）。 */
 private val SUBJECT_ORDER = listOf(
@@ -78,15 +82,22 @@ private fun FormulaItem.toSubject(): FormulaItem = when (category) {
 
 @Composable
 fun FormulaTool() {
+    val context = LocalContext.current
+    val book = remember { FormulaBook(context) }
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("全部") }
     var chapter by remember { mutableStateOf("全部") }
+    var bookOnly by remember { mutableStateOf(false) }
+    var favRefresh by remember { mutableStateOf(0) }
+    var noteFor by remember { mutableStateOf<FormulaItem?>(null) }
+    var noteText by remember { mutableStateOf("") }
 
     val allFormulas = remember {
         (FormulaData.all + FormulaDataExtra.all + FormulaDataBooks.all +
-            FormulaDataMore.all + FormulaDataMore2.all + FormulaDataMore3.all)
+            FormulaDataMore.all + FormulaDataMore2.all + FormulaDataMore3.all + FormulaDataMore4.all)
             .map { it.toSubject() }
     }
+    val favorites = remember(favRefresh) { book.favorites() }
     val categories = remember {
         listOf("全部") + SUBJECT_ORDER.filter { subject -> allFormulas.any { it.category == subject } } +
             allFormulas.map { it.category }.distinct().filter { it !in SUBJECT_ORDER }
@@ -96,22 +107,39 @@ fun FormulaTool() {
         else listOf("全部") + allFormulas.filter { it.category == category }
             .map { it.chapter }.filter { it.isNotBlank() }.distinct()
     }
-    val items = remember(query, category, chapter) {
+    val items = remember(query, category, chapter, bookOnly, favorites) {
         allFormulas.filter { item ->
-            (category == "全部" || item.category == category) &&
+            (!bookOnly || favorites.contains(book.keyOf(item))) &&
+                (category == "全部" || item.category == category) &&
                 (chapter == "全部" || item.chapter == chapter) &&
                 (query.isBlank() ||
                     item.name.contains(query, true) ||
                     item.expression.contains(query, true) ||
                     item.note.contains(query, true) ||
                     item.category.contains(query, true) ||
-                    item.chapter.contains(query, true))
+                    item.chapter.contains(query, true) ||
+                    book.note(book.keyOf(item)).contains(query, true))
+        }
+    }
+    val bookText = remember(favorites, favRefresh) {
+        buildString {
+            appendLine("小温工具箱 · 我的公式本（${favorites.size} 条）")
+            appendLine("——————————————")
+            allFormulas.filter { favorites.contains(book.keyOf(it)) }.forEachIndexed { i, f ->
+                appendLine("${i + 1}. ${f.name}")
+                appendLine("${f.category}${if (f.chapter.isNotBlank()) " · ${f.chapter}" else ""}")
+                appendLine(f.expression)
+                val n = book.note(book.keyOf(f))
+                if (n.isNotBlank()) appendLine("笔记：$n")
+                appendLine()
+            }
         }
     }
 
     Column(Modifier.fillMaxSize()) {
         Text(
-            "🧮 数学 / 物理公式 · ${items.size} / ${allFormulas.size} 条（按科目分类）",
+            if (bookOnly) "⭐ 我的公式本 · ${items.size} 条"
+            else "🧮 数学 / 物理公式 · ${items.size} / ${allFormulas.size} 条（按科目分类）",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 16.dp)
@@ -120,10 +148,28 @@ fun FormulaTool() {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("搜索公式名称 / 表达式 / 说明") },
+            label = { Text("搜索公式名称 / 表达式 / 说明 / 我的笔记") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
+        Spacer(Modifier.height(8.dp))
+        ChoiceChips(
+            options = listOf(false, true),
+            selected = bookOnly,
+            onSelect = { bookOnly = it },
+            label = { if (it) "⭐ 我的公式本（${favorites.size}）" else "📚 全部公式" },
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        if (bookOnly && favorites.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CopyButton(text = bookText, modifier = Modifier.weight(1f))
+                ShareButton(text = bookText, title = "分享我的公式本", modifier = Modifier.weight(1f))
+            }
+        }
         Spacer(Modifier.height(8.dp))
         ChoiceChips(
             options = categories,
@@ -151,6 +197,9 @@ fun FormulaTool() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             itemsIndexed(items, key = { index, item -> "$index|${item.category}|${item.name}" }) { _, formula ->
+                val key = book.keyOf(formula)
+                val favorite = favorites.contains(key)
+                val myNote = book.note(key)
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -173,8 +222,25 @@ fun FormulaTool() {
                                     color = MaterialTheme.colorScheme.secondary
                                 )
                             }
+                            TextButton(onClick = {
+                                book.toggle(key)
+                                favRefresh++
+                            }) {
+                                Text(
+                                    if (favorite) "★" else "☆",
+                                    fontSize = 22.sp,
+                                    color = if (favorite) MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = {
+                                noteFor = formula
+                                noteText = myNote
+                            }) {
+                                Text("📝", fontSize = 18.sp)
+                            }
                         }
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(6.dp))
                         // 公式主体：LaTeX 风格排版 + 淡色底
                         Box(
                             Modifier
@@ -198,15 +264,59 @@ fun FormulaTool() {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        if (myNote.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "📝 我的笔记：$myNote",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         CopyButton(text = "${formula.name}\n${formula.expression}\n${formula.note}")
                     }
                 }
             }
             if (items.isEmpty()) {
-                item { Text("没有找到相关公式", modifier = Modifier.padding(16.dp)) }
+                item {
+                    Text(
+                        if (bookOnly) "公式本还是空的：在公式卡片右上角点 ☆ 即可收藏"
+                        else "没有找到相关公式",
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
+    }
+
+    noteFor?.let { formula ->
+        AlertDialog(
+            onDismissRequest = { noteFor = null },
+            title = { Text("公式笔记：${formula.name}") },
+            text = {
+                Column {
+                    Text(formula.expression, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        label = { Text("记录理解、适用条件、易错点…") },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    book.setNote(book.keyOf(formula), noteText)
+                    noteFor = null
+                    favRefresh++
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { noteFor = null }) { Text("取消") }
+            }
+        )
     }
 }
